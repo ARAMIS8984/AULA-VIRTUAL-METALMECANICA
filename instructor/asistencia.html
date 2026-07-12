@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asistencia - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .fila-aprendiz {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--gris-borde);
+    gap: 12px;
+  }
+  .fila-aprendiz:last-child { border-bottom: none; }
+  .fila-aprendiz .nombre { font-weight: 500; flex: 1; }
+  .fila-aprendiz .doc { font-size: 0.8rem; color: var(--gris-texto); }
+  .opciones-estado { display: flex; gap: 6px; }
+  .opciones-estado button {
+    padding: 6px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--gris-borde);
+    background: var(--blanco);
+    font-family: var(--fuente);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--gris-texto);
+  }
+  .opciones-estado button.sel-presente.activo { background: rgba(57,169,0,0.12); border-color: var(--verde-sena); color: var(--verde-oscuro); }
+  .opciones-estado button.sel-ausente.activo { background: rgba(214,69,69,0.12); border-color: var(--rojo-error); color: var(--rojo-error); }
+  .opciones-estado button.sel-excusa.activo { background: rgba(255,182,0,0.15); border-color: var(--amarillo-alerta); color: #8a6200; }
+  .opciones-estado button.sel-tarde.activo { background: rgba(0,48,77,0.1); border-color: var(--azul-sena); color: var(--azul-sena); }
+  .acciones-rapidas { display: flex; gap: 8px; margin-bottom: 14px; }
+  .acciones-rapidas button { font-size: 0.8rem; padding: 6px 12px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Fichas</a>
+    <a href="asistencia.html" class="activo">Asistencia</a>
+    <a href="material.html">Material</a>
+    <a href="examenes.html">Exámenes</a>
+    <a href="reportes.html">Reportes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:820px;">
+  <h2 style="margin-bottom:20px;">Tomar asistencia</h2>
+
+  <div class="tarjeta espaciado-v" style="margin-bottom:20px;">
+    <div class="grid-2">
+      <div class="campo" style="margin-bottom:0;">
+        <label for="select-ficha">Ficha</label>
+        <select id="select-ficha" onchange="alCambiarFicha()"></select>
+      </div>
+      <div class="campo" style="margin-bottom:0;">
+        <label for="fecha-asistencia">Fecha</label>
+        <input type="date" id="fecha-asistencia" onchange="cargarAsistenciaExistente()">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="campo" style="margin-bottom:0;">
+        <label for="select-competencia">Competencia</label>
+        <select id="select-competencia" onchange="alCambiarCompetencia()">
+          <option value="">Sin especificar</option>
+        </select>
+      </div>
+      <div class="campo" style="margin-bottom:0;">
+        <label for="select-resultado">Resultado de aprendizaje</label>
+        <select id="select-resultado">
+          <option value="">Sin especificar</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="sesiones-del-dia" style="margin-bottom:16px;"></div>
+
+  <div class="mensaje-error" id="mensaje-error"></div>
+  <div class="mensaje-error" id="mensaje-exito" style="background:rgba(57,169,0,0.1); color:var(--verde-oscuro);"></div>
+
+  <div class="tarjeta" id="tarjeta-lista" style="padding:0;">
+    <div style="padding:16px 20px 0;">
+      <div class="acciones-rapidas">
+        <button class="btn btn-secundario" onclick="marcarTodos('Presente')">Marcar todos presentes</button>
+        <button class="btn btn-secundario" onclick="marcarTodos('Ausente')">Marcar todos ausentes</button>
+      </div>
+    </div>
+    <div id="lista-aprendices">
+      <p style="color:var(--gris-texto); padding:20px;">Selecciona una ficha para comenzar.</p>
+    </div>
+  </div>
+
+  <div class="fila-acciones">
+    <button class="btn btn-primario" id="btn-guardar" onclick="guardarAsistencia()" disabled>Guardar asistencia</button>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+requerirSesionInstructor();
+
+const parametros = new URLSearchParams(window.location.search);
+const fichaIdInicial = parametros.get('ficha_id');
+
+let aprendicesActuales = [];
+let estadosSeleccionados = {}; // { aprendiz_id: 'Presente' | 'Ausente' | 'Excusa' | 'Tarde' }
+let idsAsistenciaExistente = {}; // { aprendiz_id: registro_id } para saber si es update o insert
+
+document.getElementById('fecha-asistencia').valueAsDate = new Date();
+
+async function cargarFichas() {
+  const { data: fichas, error } = await supabaseClient
+    .from('fichas')
+    .select('id, numero_ficha, programa')
+    .order('created_at', { ascending: false });
+
+  const select = document.getElementById('select-ficha');
+  if (error || !fichas || fichas.length === 0) {
+    select.innerHTML = '<option value="">No hay fichas creadas</option>';
+    return;
+  }
+
+  select.innerHTML = fichas.map(f => `<option value="${f.id}">${f.numero_ficha} - ${f.programa}</option>`).join('');
+
+  if (fichaIdInicial && fichas.some(f => f.id === fichaIdInicial)) {
+    select.value = fichaIdInicial;
+  }
+
+  alCambiarFicha();
+}
+
+async function alCambiarFicha() {
+  const fichaId = document.getElementById('select-ficha').value;
+  if (!fichaId) return;
+
+  await Promise.all([cargarAprendices(fichaId), cargarCompetencias(fichaId)]);
+  cargarAsistenciaExistente();
+}
+
+async function cargarAprendices(fichaId) {
+  const { data: aprendices, error } = await supabaseClient
+    .from('aprendices')
+    .select('id, nombre_completo, numero_documento')
+    .eq('ficha_id', fichaId)
+    .order('nombre_completo');
+
+  if (error || !aprendices) return;
+  aprendicesActuales = aprendices;
+  estadosSeleccionados = {};
+  aprendices.forEach(a => estadosSeleccionados[a.id] = 'Presente');
+  renderizarLista();
+  document.getElementById('btn-guardar').disabled = aprendices.length === 0;
+}
+
+async function cargarCompetencias(fichaId) {
+  const { data: competencias, error } = await supabaseClient
+    .from('competencias')
+    .select('id, nombre')
+    .eq('ficha_id', fichaId)
+    .order('nombre');
+
+  const select = document.getElementById('select-competencia');
+  select.innerHTML = '<option value="">Sin especificar</option>' +
+    (competencias || []).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+  document.getElementById('select-resultado').innerHTML = '<option value="">Sin especificar</option>';
+  await cargarSesionesDelDia();
+}
+
+async function cargarResultados() {
+  const competenciaId = document.getElementById('select-competencia').value;
+  const select = document.getElementById('select-resultado');
+  if (!competenciaId) {
+    select.innerHTML = '<option value="">Sin especificar</option>';
+    return;
+  }
+  const { data: resultados, error } = await supabaseClient
+    .from('resultados_aprendizaje')
+    .select('id, nombre')
+    .eq('competencia_id', competenciaId)
+    .order('nombre');
+
+  select.innerHTML = '<option value="">Sin especificar</option>' +
+    (resultados || []).map(r => `<option value="${r.id}">${r.nombre}</option>`).join('');
+}
+
+// Al cambiar de competencia: se filtran sus RA y se carga (si existe) la
+// asistencia YA guardada para esa competencia específica ese día.
+async function alCambiarCompetencia() {
+  await cargarResultados();
+  await cargarAsistenciaExistente();
+}
+
+// Muestra qué competencias ya tienen asistencia registrada este día para esta ficha,
+// para que el instructor sepa qué sesiones ya cubrió y cuáles le faltan.
+async function cargarSesionesDelDia() {
+  const fichaId = document.getElementById('select-ficha').value;
+  const fecha = document.getElementById('fecha-asistencia').value;
+  const cont = document.getElementById('sesiones-del-dia');
+  if (!fichaId || !fecha) { cont.innerHTML = ''; return; }
+
+  const { data: registros, error } = await supabaseClient
+    .from('asistencia')
+    .select('competencia_id, competencias(nombre)')
+    .eq('ficha_id', fichaId)
+    .eq('fecha', fecha);
+
+  if (error || !registros || registros.length === 0) {
+    cont.innerHTML = '';
+    return;
+  }
+
+  const nombresUnicos = [...new Set(registros.map(r => r.competencias?.nombre || 'Sin especificar'))];
+  cont.innerHTML = `
+    <div class="tarjeta" style="background:rgba(0,48,77,0.04); padding:12px 16px;">
+      <p style="font-size:0.85rem; color:var(--azul-sena);">
+        <strong>Ya registraste asistencia hoy para:</strong> ${nombresUnicos.join(', ')}
+      </p>
+    </div>
+  `;
+}
+
+function renderizarLista() {
+  const cont = document.getElementById('lista-aprendices');
+  if (aprendicesActuales.length === 0) {
+    cont.innerHTML = '<p style="color:var(--gris-texto); padding:20px;">Esta ficha no tiene aprendices registrados.</p>';
+    return;
+  }
+
+  cont.innerHTML = aprendicesActuales.map(a => `
+    <div class="fila-aprendiz">
+      <div>
+        <div class="nombre">${a.nombre_completo}</div>
+        <div class="doc">${a.numero_documento}</div>
+      </div>
+      <div class="opciones-estado" data-aprendiz="${a.id}">
+        <button type="button" class="sel-presente" onclick="marcarEstado('${a.id}','Presente')">Presente</button>
+        <button type="button" class="sel-ausente" onclick="marcarEstado('${a.id}','Ausente')">Ausente</button>
+        <button type="button" class="sel-excusa" onclick="marcarEstado('${a.id}','Excusa')">Excusa</button>
+        <button type="button" class="sel-tarde" onclick="marcarEstado('${a.id}','Tarde')">Tarde</button>
+      </div>
+    </div>
+  `).join('');
+
+  aplicarEstadosVisuales();
+}
+
+function marcarEstado(aprendizId, estado) {
+  estadosSeleccionados[aprendizId] = estado;
+  aplicarEstadosVisuales();
+}
+
+function marcarTodos(estado) {
+  aprendicesActuales.forEach(a => estadosSeleccionados[a.id] = estado);
+  aplicarEstadosVisuales();
+}
+
+function aplicarEstadosVisuales() {
+  document.querySelectorAll('.opciones-estado').forEach(grupo => {
+    const aprendizId = grupo.dataset.aprendiz;
+    const estado = estadosSeleccionados[aprendizId];
+    grupo.querySelectorAll('button').forEach(btn => btn.classList.remove('activo'));
+    const mapa = { Presente: '.sel-presente', Ausente: '.sel-ausente', Excusa: '.sel-excusa', Tarde: '.sel-tarde' };
+    const btnActivo = grupo.querySelector(mapa[estado]);
+    if (btnActivo) btnActivo.classList.add('activo');
+  });
+}
+
+async function cargarAsistenciaExistente() {
+  const fichaId = document.getElementById('select-ficha').value;
+  const fecha = document.getElementById('fecha-asistencia').value;
+  const competenciaId = document.getElementById('select-competencia').value || null;
+  if (!fichaId || !fecha || aprendicesActuales.length === 0) return;
+
+  await cargarSesionesDelDia();
+
+  let consulta = supabaseClient
+    .from('asistencia')
+    .select('id, aprendiz_id, estado, competencia_id, resultado_id')
+    .eq('ficha_id', fichaId)
+    .eq('fecha', fecha);
+
+  consulta = competenciaId ? consulta.eq('competencia_id', competenciaId) : consulta.is('competencia_id', null);
+
+  const { data: registros, error } = await consulta;
+
+  idsAsistenciaExistente = {};
+
+  // Reiniciar a "Presente" por defecto antes de aplicar lo que exista para esta competencia
+  aprendicesActuales.forEach(a => estadosSeleccionados[a.id] = 'Presente');
+
+  if (!error && registros) {
+    registros.forEach(r => {
+      estadosSeleccionados[r.aprendiz_id] = r.estado;
+      idsAsistenciaExistente[r.aprendiz_id] = r.id;
+    });
+    if (registros.length > 0 && registros[0].resultado_id) {
+      document.getElementById('select-resultado').value = registros[0].resultado_id;
+    }
+  }
+  aplicarEstadosVisuales();
+}
+
+async function guardarAsistencia() {
+  ocultarMensajes();
+  const fichaId = document.getElementById('select-ficha').value;
+  const fecha = document.getElementById('fecha-asistencia').value;
+  const competenciaId = document.getElementById('select-competencia').value || null;
+  const resultadoId = document.getElementById('select-resultado').value || null;
+
+  if (!fichaId || !fecha) {
+    mostrarError('Selecciona una ficha y una fecha.');
+    return;
+  }
+
+  const boton = document.getElementById('btn-guardar');
+  boton.disabled = true;
+  boton.textContent = 'Guardando...';
+
+  const registros = aprendicesActuales.map(a => ({
+    ficha_id: fichaId,
+    aprendiz_id: a.id,
+    fecha: fecha,
+    estado: estadosSeleccionados[a.id] || 'Presente',
+    competencia_id: competenciaId,
+    resultado_id: resultadoId,
+  }));
+
+  const { error } = await supabaseClient
+    .from('asistencia')
+    .upsert(registros, { onConflict: 'aprendiz_id,fecha,competencia_id' });
+
+  boton.disabled = false;
+  boton.textContent = 'Guardar asistencia';
+
+  if (error) {
+    mostrarError('Error al guardar: ' + error.message);
+    return;
+  }
+
+  const etiquetaCompetencia = document.getElementById('select-competencia').selectedOptions[0]?.textContent || 'Sin especificar';
+  mostrarExito(`Asistencia guardada para ${aprendicesActuales.length} aprendices el ${fecha} (${etiquetaCompetencia}).`);
+  cargarSesionesDelDia();
+}
+
+function mostrarError(texto) {
+  const el = document.getElementById('mensaje-error');
+  el.textContent = texto;
+  el.classList.add('visible');
+}
+function mostrarExito(texto) {
+  const el = document.getElementById('mensaje-exito');
+  el.textContent = texto;
+  el.classList.add('visible');
+}
+function ocultarMensajes() {
+  document.getElementById('mensaje-error').classList.remove('visible');
+  document.getElementById('mensaje-exito').classList.remove('visible');
+}
+
+cargarFichas();
+</script>
+</body>
+</html>
