@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AulaSENA - Iniciar sesión</title>
+<link rel="stylesheet" href="css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="pantalla-login">
+  <div class="caja-login">
+    <div class="marca-login">
+      <h1>Aula<span>SENA</span></h1>
+      <p>Centro Nacional Colombo Alemán</p>
+    </div>
+
+    <div class="selector-rol">
+      <button type="button" id="btn-rol-instructor" class="activo" onclick="cambiarRol('instructor')">Instructor</button>
+      <button type="button" id="btn-rol-aprendiz" onclick="cambiarRol('aprendiz')">Aprendiz</button>
+    </div>
+
+    <div class="mensaje-error" id="mensaje-error"></div>
+
+    <!-- Formulario Instructor -->
+    <form id="form-instructor" class="espaciado-v" onsubmit="return iniciarSesionInstructor(event)">
+      <div class="campo">
+        <label for="email-instructor">Correo</label>
+        <input type="email" id="email-instructor" required autocomplete="username">
+      </div>
+      <div class="campo">
+        <label for="clave-instructor">Contraseña</label>
+        <input type="password" id="clave-instructor" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primario" style="width:100%; justify-content:center;" id="btn-instructor">
+        Ingresar
+      </button>
+    </form>
+
+    <!-- Formulario Aprendiz -->
+    <form id="form-aprendiz" class="espaciado-v oculto" onsubmit="return iniciarSesionAprendiz(event)">
+      <div class="campo">
+        <label for="ficha-aprendiz">Número de ficha</label>
+        <input type="text" id="ficha-aprendiz" required inputmode="numeric" placeholder="Ej: 2967805">
+      </div>
+      <div class="campo">
+        <label for="documento-aprendiz">Número de documento</label>
+        <input type="text" id="documento-aprendiz" required inputmode="numeric" placeholder="Sin puntos ni espacios">
+      </div>
+      <button type="submit" class="btn btn-primario" style="width:100%; justify-content:center;" id="btn-aprendiz">
+        Ingresar
+      </button>
+    </form>
+  </div>
+</div>
+
+<script src="js/supabase-config.js"></script>
+<script src="js/auth.js"></script>
+</body>
+</html>
