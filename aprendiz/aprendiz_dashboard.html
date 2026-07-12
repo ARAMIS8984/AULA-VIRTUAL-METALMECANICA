@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi aula - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html" class="activo">Inicio</a>
+    <a href="material.html">Material</a>
+    <a href="examenes.html">Exámenes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionAprendiz()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px;">
+  <h2 id="saludo" style="margin-bottom:4px;"></h2>
+  <p id="info-ficha" style="color:var(--gris-texto); margin-bottom:28px;"></p>
+
+  <div class="grid-2">
+    <a href="material.html" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
+      <h3 style="color:var(--azul-sena);">📚 Material de formación</h3>
+      <p class="texto-ayuda">Consulta documentos, enlaces y videos de tu ficha</p>
+    </a>
+    <a href="examenes.html" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
+      <h3 style="color:var(--azul-sena);">📝 Exámenes</h3>
+      <p class="texto-ayuda">Presenta los exámenes asignados a tu ficha</p>
+    </a>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+const sesion = requerirSesionAprendiz();
+if (sesion) {
+  document.getElementById('saludo').textContent = `Hola, ${sesion.nombre.split(' ')[0]}`;
+  document.getElementById('info-ficha').textContent = `Ficha ${sesion.numero_ficha} · ${sesion.programa}`;
+}
+</script>
+</body>
+</html>
