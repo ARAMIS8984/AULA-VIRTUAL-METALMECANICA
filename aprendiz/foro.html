@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Foro - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .tema-tarjeta {
+    padding: 14px 16px;
+    border: 1px solid var(--gris-borde);
+    border-radius: 10px;
+    cursor: pointer;
+    margin-bottom: 10px;
+    background: var(--blanco);
+  }
+  .tema-tarjeta:hover { border-color: var(--verde-sena); }
+  .tema-tarjeta.seleccionado { border-color: var(--verde-sena); background: rgba(57,169,0,0.04); }
+  .tema-titulo { font-weight: 600; }
+  .tema-meta { font-size: 0.78rem; color: var(--gris-texto); margin-top: 4px; }
+  .mensaje-burbuja {
+    padding: 10px 14px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    max-width: 85%;
+  }
+  .mensaje-instructor { background: rgba(0,48,77,0.08); }
+  .mensaje-aprendiz { background: var(--gris-fondo); margin-left: auto; }
+  .mensaje-propio { background: rgba(57,169,0,0.1); margin-left: auto; }
+  .mensaje-autor { font-size: 0.78rem; font-weight: 700; color: var(--azul-sena); margin-bottom: 2px; }
+  .mensaje-texto { font-size: 0.9rem; }
+  .mensaje-fecha { font-size: 0.7rem; color: var(--gris-texto); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Inicio</a>
+    <a href="material.html">Material</a>
+    <a href="foro.html" class="activo">Foro</a>
+    <a href="examenes.html">Exámenes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionAprendiz()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px;">
+  <h2 style="margin-bottom:4px;">Foro de discusión</h2>
+  <p id="info-ficha" style="color:var(--gris-texto); margin-bottom:24px;"></p>
+
+  <div class="grid-2" style="align-items:start;">
+    <div id="lista-temas"><p class="texto-ayuda">Cargando temas...</p></div>
+
+    <div class="tarjeta" id="panel-tema" style="min-height:300px;">
+      <p class="texto-ayuda">Elige un tema de la izquierda para ver la discusión.</p>
+    </div>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+const sesion = requerirSesionAprendiz();
+let temaSeleccionado = null;
+
+async function inicializar() {
+  if (!sesion) return;
+  document.getElementById('info-ficha').textContent = `Ficha ${sesion.numero_ficha} · ${sesion.programa}`;
+  await cargarTemas();
+}
+
+async function cargarTemas() {
+  const cont = document.getElementById('lista-temas');
+  const { data: temas, error } = await supabaseClient
+    .from('foros_temas')
+    .select('id, titulo, descripcion, estado, created_at')
+    .eq('ficha_id', sesion.ficha_id)
+    .order('created_at', { ascending: false });
+
+  if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
+  if (!temas || temas.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Tu instructor aún no ha creado ningún tema de discusión.</p>'; return; }
+
+  const { data: respuestas } = await supabaseClient
+    .from('foros_respuestas')
+    .select('tema_id')
+    .in('tema_id', temas.map(t => t.id));
+
+  const conteos = {};
+  (respuestas || []).forEach(r => conteos[r.tema_id] = (conteos[r.tema_id] || 0) + 1);
+
+  cont.innerHTML = temas.map(t => `
+    <div class="tema-tarjeta ${temaSeleccionado === t.id ? 'seleccionado' : ''}" onclick="abrirTema('${t.id}')">
+      <div class="tema-titulo">${t.titulo} ${t.estado === 'cerrado' ? '<span class="etiqueta etiqueta-gris">Cerrado</span>' : ''}</div>
+      <div class="tema-meta">${conteos[t.id] || 0} respuesta(s) · ${new Date(t.created_at).toLocaleDateString('es-CO')}</div>
+    </div>
+  `).join('');
+}
+
+async function abrirTema(temaId) {
+  temaSeleccionado = temaId;
+  cargarTemas();
+
+  const panel = document.getElementById('panel-tema');
+  panel.innerHTML = '<p class="texto-ayuda">Cargando...</p>';
+
+  const { data: tema, error: errorTema } = await supabaseClient
+    .from('foros_temas')
+    .select('*')
+    .eq('id', temaId)
+    .single();
+
+  const { data: respuestas, error } = await supabaseClient
+    .from('foros_respuestas')
+    .select('*')
+    .eq('tema_id', temaId)
+    .order('created_at', { ascending: true });
+
+  if (error || errorTema) { panel.innerHTML = `<p style="color:var(--rojo-error);">Error al cargar el tema.</p>`; return; }
+
+  panel.innerHTML = `
+    <h3 style="margin-bottom:6px;">${tema.titulo}</h3>
+    ${tema.descripcion ? `<p class="texto-ayuda" style="margin-bottom:14px;">${tema.descripcion}</p>` : ''}
+    <div id="hilo-mensajes" style="max-height:320px; overflow-y:auto; margin-bottom:14px;">
+      ${respuestas.length === 0 ? '<p class="texto-ayuda">Sé el primero en responder.</p>' : respuestas.map(r => `
+        <div class="mensaje-burbuja ${r.autor_tipo === 'instructor' ? 'mensaje-instructor' : (r.aprendiz_id === sesion.id ? 'mensaje-propio' : 'mensaje-aprendiz')}">
+          <div class="mensaje-autor">${r.autor_nombre}${r.autor_tipo === 'instructor' ? ' (Instructor)' : ''}</div>
+          <div class="mensaje-texto">${r.mensaje}</div>
+          <div class="mensaje-fecha">${new Date(r.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+        </div>
+      `).join('')}
+    </div>
+    ${tema.estado === 'cerrado'
+      ? '<p class="texto-ayuda">Este tema está cerrado, ya no se pueden agregar respuestas.</p>'
+      : `<div style="display:flex; gap:8px;">
+          <input type="text" id="input-respuesta" placeholder="Escribe tu respuesta..." onkeydown="if(event.key==='Enter') enviarRespuesta('${tema.id}')">
+          <button class="btn btn-primario" onclick="enviarRespuesta('${tema.id}')">Enviar</button>
+        </div>`
+    }
+  `;
+}
+
+async function enviarRespuesta(temaId) {
+  const input = document.getElementById('input-respuesta');
+  const mensaje = input.value.trim();
+  if (!mensaje) return;
+
+  const { error } = await supabaseClient.from('foros_respuestas').insert({
+    tema_id: temaId,
+    autor_tipo: 'aprendiz',
+    autor_nombre: sesion.nombre,
+    aprendiz_id: sesion.id,
+    mensaje,
+  });
+
+  if (error) { alert('Error al enviar: ' + error.message); return; }
+  input.value = '';
+  abrirTema(temaId);
+}
+
+inicializar();
+</script>
+</body>
+</html>
