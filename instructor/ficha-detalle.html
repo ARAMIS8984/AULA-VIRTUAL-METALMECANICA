@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Detalle de ficha - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Fichas</a>
+    <a href="asistencia.html">Asistencia</a>
+    <a href="material.html">Material</a>
+    <a href="examenes.html">Exámenes</a>
+    <a href="foro.html">Foro</a>
+    <a href="reportes.html">Reportes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px;">
+  <a href="dashboard.html" style="color:var(--gris-texto); font-size:0.85rem; text-decoration:none;">← Volver a fichas</a>
+
+  <div id="encabezado-ficha" style="margin:16px 0 28px;">
+    <p style="color:var(--gris-texto);">Cargando...</p>
+  </div>
+
+  <div class="tarjeta espaciado-v" style="margin-bottom:24px;">
+    <div class="grid-2" style="align-items:flex-end;">
+      <div class="campo" style="margin-bottom:0;">
+        <label for="input-nombre-grupo">Nombre del grupo (alias para identificarlo rápido)</label>
+        <input type="text" id="input-nombre-grupo" placeholder="Ej: Grupo A - Mañana">
+      </div>
+      <button class="btn btn-primario" onclick="guardarNombreGrupo()" id="btn-guardar-grupo">Guardar nombre</button>
+    </div>
+    <p class="mensaje-error" id="mensaje-grupo" style="background:rgba(57,169,0,0.1); color:var(--verde-oscuro);"></p>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:24px;">
+    <a href="asistencia.html" id="link-asistencia" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
+      <h3 style="color:var(--azul-sena);">📋 Tomar asistencia</h3>
+      <p class="texto-ayuda">Registra asistencia diaria de esta ficha</p>
+    </a>
+    <a href="material.html" id="link-material" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
+      <h3 style="color:var(--azul-sena);">📚 Material de formación</h3>
+      <p class="texto-ayuda">Sube documentos, enlaces y videos</p>
+    </a>
+    <a href="examenes.html" id="link-examenes" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
+      <h3 style="color:var(--azul-sena);">📝 Exámenes</h3>
+      <p class="texto-ayuda">Crea y gestiona exámenes</p>
+    </a>
+    <a href="reportes.html" id="link-reportes" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
+      <h3 style="color:var(--azul-sena);">📊 Reportes</h3>
+      <p class="texto-ayuda">Exporta información de la ficha</p>
+    </a>
+  </div>
+
+  <div class="tarjeta">
+    <h3 style="margin-bottom:14px;">Aprendices (<span id="conteo-aprendices">0</span>)</h3>
+    <div style="max-height:420px; overflow-y:auto;" class="tabla-scroll">
+      <table>
+        <thead><tr><th>Nombre</th><th>Documento</th><th>Estado</th></tr></thead>
+        <tbody id="tabla-aprendices"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+requerirSesionInstructor();
+
+const parametros = new URLSearchParams(window.location.search);
+const fichaId = parametros.get('id');
+
+if (!fichaId) {
+  window.location.href = 'dashboard.html';
+}
+
+// Propagar el id de la ficha a los enlaces de los módulos
+['link-asistencia','link-material','link-examenes','link-reportes'].forEach(idEnlace => {
+  const el = document.getElementById(idEnlace);
+  el.href = `${el.getAttribute('href')}?ficha_id=${fichaId}`;
+});
+
+async function cargarDetalleFicha() {
+  const { data: ficha, error } = await supabaseClient
+    .from('fichas')
+    .select('*')
+    .eq('id', fichaId)
+    .single();
+
+  if (error || !ficha) {
+    document.getElementById('encabezado-ficha').innerHTML = `<p style="color:var(--rojo-error);">No se encontró la ficha.</p>`;
+    return;
+  }
+
+  document.getElementById('encabezado-ficha').innerHTML = `
+    <h2>${ficha.nombre_grupo ? ficha.nombre_grupo + ' · ' : ''}Ficha ${ficha.numero_ficha}</h2>
+    <p style="color:var(--gris-texto); margin-top:4px;">${ficha.programa} · ${ficha.trimestre}</p>
+  `;
+  document.getElementById('input-nombre-grupo').value = ficha.nombre_grupo || '';
+
+  const { data: aprendices, error: errorAprendices } = await supabaseClient
+    .from('aprendices')
+    .select('nombre_completo, numero_documento, estado')
+    .eq('ficha_id', fichaId)
+    .order('nombre_completo');
+
+  if (errorAprendices || !aprendices) return;
+
+  document.getElementById('conteo-aprendices').textContent = aprendices.length;
+  document.getElementById('tabla-aprendices').innerHTML = aprendices.map(a => `
+    <tr>
+      <td>${a.nombre_completo}</td>
+      <td>${a.numero_documento}</td>
+      <td><span class="etiqueta etiqueta-verde">${a.estado}</span></td>
+    </tr>
+  `).join('');
+}
+
+async function guardarNombreGrupo() {
+  const nombreGrupo = document.getElementById('input-nombre-grupo').value.trim();
+  const boton = document.getElementById('btn-guardar-grupo');
+  const mensaje = document.getElementById('mensaje-grupo');
+
+  boton.disabled = true;
+  boton.textContent = 'Guardando...';
+
+  const { error } = await supabaseClient
+    .from('fichas')
+    .update({ nombre_grupo: nombreGrupo || null })
+    .eq('id', fichaId);
+
+  boton.disabled = false;
+  boton.textContent = 'Guardar nombre';
+
+  if (error) {
+    mensaje.style.background = 'rgba(214,69,69,0.1)';
+    mensaje.style.color = 'var(--rojo-error)';
+    mensaje.textContent = 'Error al guardar: ' + error.message;
+  } else {
+    mensaje.style.background = 'rgba(57,169,0,0.1)';
+    mensaje.style.color = 'var(--verde-oscuro)';
+    mensaje.textContent = 'Nombre de grupo guardado ✓';
+    cargarDetalleFicha();
+  }
+  mensaje.classList.add('visible');
+  setTimeout(() => mensaje.classList.remove('visible'), 3000);
+}
+
+cargarDetalleFicha();
+</script>
+</body>
+</html>

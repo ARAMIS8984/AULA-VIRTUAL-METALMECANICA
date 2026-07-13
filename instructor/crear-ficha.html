@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crear ficha - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Fichas</a>
+    <a href="asistencia.html">Asistencia</a>
+    <a href="material.html">Material</a>
+    <a href="examenes.html">Exámenes</a>
+    <a href="foro.html">Foro</a>
+    <a href="reportes.html">Reportes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:720px;">
+  <h2 style="margin-bottom:6px;">Crear ficha nueva</h2>
+  <p style="color:var(--gris-texto); margin-bottom:24px;">Sube el Reporte de Juicios de Evaluación (Excel exportado de SOFIA Plus).</p>
+
+  <div class="tarjeta espaciado-v">
+
+    <!-- Paso 1: Trimestre -->
+    <div class="campo">
+      <label for="trimestre">Trimestre</label>
+      <input type="text" id="trimestre" placeholder="Ej: III trimestre 2026" required>
+    </div>
+
+    <div class="campo">
+      <label for="nombre-grupo">Nombre del grupo (opcional, para identificarlo rápido)</label>
+      <input type="text" id="nombre-grupo" placeholder="Ej: Grupo A - Mañana">
+    </div>
+
+    <!-- Paso 2: Cargar archivo -->
+    <div>
+      <label>Reporte de Juicios de Evaluación</label>
+      <div class="zona-carga" id="zona-carga" onclick="document.getElementById('input-archivo').click()">
+        <div class="icono">📄</div>
+        <p id="texto-zona-carga"><strong>Haz clic para subir</strong> o arrastra el archivo aquí<br>Formatos: .xls, .xlsx</p>
+      </div>
+      <input type="file" id="input-archivo" accept=".xls,.xlsx" class="oculto">
+    </div>
+
+    <div class="mensaje-error" id="mensaje-error"></div>
+
+    <!-- Vista previa -->
+    <div id="vista-previa" class="oculto espaciado-v">
+      <div class="grid-2">
+        <div>
+          <label>Ficha</label>
+          <p id="preview-ficha" style="font-weight:600; font-size:1.05rem;"></p>
+        </div>
+        <div>
+          <label>Programa</label>
+          <p id="preview-programa" style="font-weight:600; font-size:1.05rem;"></p>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label>Aprendices en formación</label>
+          <p id="preview-aprendices" style="font-weight:600; font-size:1.05rem; color:var(--verde-oscuro);"></p>
+        </div>
+        <div>
+          <label>Competencias detectadas</label>
+          <p id="preview-competencias" style="font-weight:600; font-size:1.05rem;"></p>
+        </div>
+      </div>
+
+      <details>
+        <summary style="cursor:pointer; font-size:0.9rem; color:var(--azul-sena); font-weight:600;">Ver listado de aprendices</summary>
+        <div style="max-height:240px; overflow-y:auto; margin-top:10px;">
+          <table>
+            <thead><tr><th>Nombre</th><th>Documento</th></tr></thead>
+            <tbody id="tabla-aprendices"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <div class="fila-acciones">
+        <button class="btn btn-primario" id="btn-confirmar" onclick="guardarFicha()">Confirmar y crear ficha</button>
+        <button class="btn btn-secundario" onclick="reiniciar()">Cancelar</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/excel-parser.js"></script>
+<script>
+requerirSesionInstructor();
+
+let datosParsed = null;
+
+const inputArchivo = document.getElementById('input-archivo');
+const zonaCarga = document.getElementById('zona-carga');
+
+inputArchivo.addEventListener('change', (e) => {
+  if (e.target.files[0]) procesarArchivo(e.target.files[0]);
+});
+
+zonaCarga.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  zonaCarga.classList.add('arrastrando');
+});
+zonaCarga.addEventListener('dragleave', () => zonaCarga.classList.remove('arrastrando'));
+zonaCarga.addEventListener('drop', (e) => {
+  e.preventDefault();
+  zonaCarga.classList.remove('arrastrando');
+  if (e.dataTransfer.files[0]) procesarArchivo(e.dataTransfer.files[0]);
+});
+
+function procesarArchivo(archivo) {
+  ocultarError();
+  document.getElementById('texto-zona-carga').innerHTML = `<strong>${archivo.name}</strong><br>Procesando...`;
+
+  const lector = new FileReader();
+  lector.onload = (e) => {
+    try {
+      datosParsed = parseReporteJuicio(e.target.result);
+      mostrarVistaPrevia(datosParsed);
+      document.getElementById('texto-zona-carga').innerHTML = `<strong>${archivo.name}</strong><br>✓ Archivo procesado correctamente`;
+    } catch (err) {
+      mostrarError(err.message);
+      document.getElementById('texto-zona-carga').innerHTML = `<strong>Haz clic para subir</strong> o arrastra el archivo aquí<br>Formatos: .xls, .xlsx`;
+    }
+  };
+  lector.onerror = () => mostrarError('No se pudo leer el archivo. Intenta de nuevo.');
+  lector.readAsArrayBuffer(archivo);
+}
+
+function mostrarVistaPrevia(datos) {
+  document.getElementById('preview-ficha').textContent = datos.ficha;
+  document.getElementById('preview-programa').textContent = datos.programa;
+  document.getElementById('preview-aprendices').textContent = `${datos.total_aprendices_activos} de ${datos.total_aprendices} en el reporte`;
+  document.getElementById('preview-competencias').textContent = datos.competencias.length;
+
+  const filas = datos.aprendices_activos.map(a => `
+    <tr><td>${a.nombre_completo}</td><td>${a.numero_documento}</td></tr>
+  `).join('');
+  document.getElementById('tabla-aprendices').innerHTML = filas;
+
+  document.getElementById('vista-previa').classList.remove('oculto');
+}
+
+function reiniciar() {
+  datosParsed = null;
+  document.getElementById('vista-previa').classList.add('oculto');
+  document.getElementById('texto-zona-carga').innerHTML = `<strong>Haz clic para subir</strong> o arrastra el archivo aquí<br>Formatos: .xls, .xlsx`;
+  inputArchivo.value = '';
+  ocultarError();
+}
+
+async function guardarFicha() {
+  const trimestre = document.getElementById('trimestre').value.trim();
+  if (!trimestre) {
+    mostrarError('Debes indicar el trimestre.');
+    return;
+  }
+  if (!datosParsed) {
+    mostrarError('Primero sube el archivo del Reporte de Juicios de Evaluación.');
+    return;
+  }
+
+  const boton = document.getElementById('btn-confirmar');
+  boton.disabled = true;
+  boton.textContent = 'Guardando...';
+
+  try {
+    // 1. Crear la ficha
+    const { data: ficha, error: errorFicha } = await supabaseClient
+      .from('fichas')
+      .insert({
+        numero_ficha: datosParsed.ficha,
+        programa: datosParsed.programa,
+        trimestre: trimestre,
+        nombre_grupo: document.getElementById('nombre-grupo').value.trim() || null,
+        estado_ficha: datosParsed.estado_ficha,
+        centro_formacion: datosParsed.centro_formacion,
+        total_aprendices: datosParsed.total_aprendices_activos,
+      })
+      .select()
+      .single();
+
+    if (errorFicha) throw new Error(errorFicha.message);
+
+    // 2. Insertar aprendices activos
+    const aprendicesPayload = datosParsed.aprendices_activos.map(a => ({
+      ficha_id: ficha.id,
+      tipo_documento: a.tipo_documento,
+      numero_documento: a.numero_documento,
+      nombre: a.nombre,
+      apellidos: a.apellidos,
+      nombre_completo: a.nombre_completo,
+      estado: a.estado,
+    }));
+    const { error: errorAprendices } = await supabaseClient.from('aprendices').insert(aprendicesPayload);
+    if (errorAprendices) throw new Error(errorAprendices.message);
+
+    // 3. Insertar competencias y sus resultados de aprendizaje
+    for (const comp of datosParsed.competencias) {
+      const { data: competenciaCreada, error: errorComp } = await supabaseClient
+        .from('competencias')
+        .insert({ ficha_id: ficha.id, nombre: comp.nombre })
+        .select()
+        .single();
+      if (errorComp) throw new Error(errorComp.message);
+
+      if (comp.resultados_aprendizaje.length > 0) {
+        const raPayload = comp.resultados_aprendizaje.map(nombreRA => ({
+          competencia_id: competenciaCreada.id,
+          nombre: nombreRA,
+        }));
+        const { error: errorRA } = await supabaseClient.from('resultados_aprendizaje').insert(raPayload);
+        if (errorRA) throw new Error(errorRA.message);
+      }
+    }
+
+    window.location.href = `ficha-detalle.html?id=${ficha.id}`;
+
+  } catch (err) {
+    mostrarError('Error al guardar: ' + err.message);
+    boton.disabled = false;
+    boton.textContent = 'Confirmar y crear ficha';
+  }
+}
+
+function mostrarError(texto) {
+  const el = document.getElementById('mensaje-error');
+  el.textContent = texto;
+  el.classList.add('visible');
+}
+function ocultarError() {
+  document.getElementById('mensaje-error').classList.remove('visible');
+}
+</script>
+</body>
+</html>

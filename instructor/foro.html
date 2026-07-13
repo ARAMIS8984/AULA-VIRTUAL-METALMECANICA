@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Foro - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .tema-tarjeta {
+    padding: 14px 16px;
+    border: 1px solid var(--gris-borde);
+    border-radius: 10px;
+    cursor: pointer;
+    margin-bottom: 10px;
+  }
+  .tema-tarjeta:hover { border-color: var(--verde-sena); }
+  .tema-tarjeta.seleccionado { border-color: var(--verde-sena); background: rgba(57,169,0,0.04); }
+  .tema-titulo { font-weight: 600; }
+  .tema-meta { font-size: 0.78rem; color: var(--gris-texto); margin-top: 4px; }
+  .mensaje-burbuja {
+    padding: 10px 14px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    max-width: 85%;
+  }
+  .mensaje-instructor { background: rgba(0,48,77,0.06); margin-left: auto; }
+  .mensaje-aprendiz { background: var(--gris-fondo); }
+  .mensaje-autor { font-size: 0.78rem; font-weight: 700; color: var(--azul-sena); margin-bottom: 2px; }
+  .mensaje-texto { font-size: 0.9rem; }
+  .mensaje-fecha { font-size: 0.7rem; color: var(--gris-texto); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Fichas</a>
+    <a href="asistencia.html">Asistencia</a>
+    <a href="material.html">Material</a>
+    <a href="examenes.html">Exámenes</a>
+    <a href="foro.html" class="activo">Foro</a>
+    <a href="reportes.html">Reportes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px;">
+  <h2 style="margin-bottom:20px;">Foro de discusión</h2>
+
+  <div class="tarjeta" style="margin-bottom:20px;">
+    <div class="campo" style="margin-bottom:0;">
+      <label for="select-ficha">Ficha</label>
+      <select id="select-ficha" onchange="alCambiarFicha()"></select>
+    </div>
+  </div>
+
+  <div class="grid-2" style="align-items:start;">
+    <div>
+      <div class="tarjeta espaciado-v" style="margin-bottom:16px;">
+        <h3 style="margin-bottom:4px; font-size:0.95rem;">Nuevo tema</h3>
+        <input type="text" id="titulo-tema" placeholder="Título del tema">
+        <textarea id="descripcion-tema" rows="2" placeholder="Descripción o pregunta guía (opcional)"></textarea>
+        <button class="btn btn-primario" style="width:100%;" onclick="crearTema()">+ Crear tema</button>
+      </div>
+      <div id="lista-temas"><p class="texto-ayuda">Selecciona una ficha.</p></div>
+    </div>
+
+    <div class="tarjeta" id="panel-tema" style="min-height:300px;">
+      <p class="texto-ayuda">Elige un tema de la izquierda para ver la discusión.</p>
+    </div>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+requerirSesionInstructor();
+
+let temaSeleccionado = null;
+
+async function cargarFichas() {
+  const { data: fichas, error } = await supabaseClient
+    .from('fichas')
+    .select('id, numero_ficha, programa, nombre_grupo')
+    .order('created_at', { ascending: false });
+
+  const select = document.getElementById('select-ficha');
+  if (error || !fichas || fichas.length === 0) {
+    select.innerHTML = '<option value="">No hay fichas creadas</option>';
+    return;
+  }
+  select.innerHTML = fichas.map(f => `<option value="${f.id}">${f.nombre_grupo ? f.nombre_grupo + ' — ' : ''}Ficha ${f.numero_ficha} · ${f.programa}</option>`).join('');
+
+  const ultimaFichaUsada = localStorage.getItem('aulasena_ultima_ficha');
+  if (ultimaFichaUsada && fichas.some(f => f.id === ultimaFichaUsada)) {
+    select.value = ultimaFichaUsada;
+  }
+  alCambiarFicha();
+}
+
+async function alCambiarFicha() {
+  const fichaId = document.getElementById('select-ficha').value;
+  if (!fichaId) return;
+  localStorage.setItem('aulasena_ultima_ficha', fichaId);
+  temaSeleccionado = null;
+  document.getElementById('panel-tema').innerHTML = '<p class="texto-ayuda">Elige un tema de la izquierda para ver la discusión.</p>';
+  await cargarTemas(fichaId);
+}
+
+async function crearTema() {
+  const fichaId = document.getElementById('select-ficha').value;
+  const titulo = document.getElementById('titulo-tema').value.trim();
+  const descripcion = document.getElementById('descripcion-tema').value.trim();
+
+  if (!fichaId) { alert('Selecciona una ficha.'); return; }
+  if (!titulo) { alert('El título del tema es obligatorio.'); return; }
+
+  const { error } = await supabaseClient.from('foros_temas').insert({
+    ficha_id: fichaId,
+    titulo,
+    descripcion: descripcion || null,
+  });
+
+  if (error) { alert('Error al crear el tema: ' + error.message); return; }
+
+  document.getElementById('titulo-tema').value = '';
+  document.getElementById('descripcion-tema').value = '';
+  cargarTemas(fichaId);
+}
+
+async function cargarTemas(fichaId) {
+  const cont = document.getElementById('lista-temas');
+  const { data: temas, error } = await supabaseClient
+    .from('foros_temas')
+    .select('id, titulo, descripcion, estado, created_at')
+    .eq('ficha_id', fichaId)
+    .order('created_at', { ascending: false });
+
+  if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
+  if (!temas || temas.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Aún no hay temas creados para esta ficha.</p>'; return; }
+
+  const { data: respuestas } = await supabaseClient
+    .from('foros_respuestas')
+    .select('tema_id')
+    .in('tema_id', temas.map(t => t.id));
+
+  const conteos = {};
+  (respuestas || []).forEach(r => conteos[r.tema_id] = (conteos[r.tema_id] || 0) + 1);
+
+  cont.innerHTML = temas.map(t => `
+    <div class="tema-tarjeta ${temaSeleccionado === t.id ? 'seleccionado' : ''}" onclick="abrirTema('${t.id}')">
+      <div class="tema-titulo">${t.titulo} ${t.estado === 'cerrado' ? '<span class="etiqueta etiqueta-gris">Cerrado</span>' : ''}</div>
+      <div class="tema-meta">${conteos[t.id] || 0} respuesta(s) · ${new Date(t.created_at).toLocaleDateString('es-CO')}</div>
+    </div>
+  `).join('');
+}
+
+async function abrirTema(temaId) {
+  temaSeleccionado = temaId;
+  const fichaId = document.getElementById('select-ficha').value;
+  cargarTemas(fichaId);
+
+  const panel = document.getElementById('panel-tema');
+  panel.innerHTML = '<p class="texto-ayuda">Cargando...</p>';
+
+  const { data: tema, error: errorTema } = await supabaseClient
+    .from('foros_temas')
+    .select('*')
+    .eq('id', temaId)
+    .single();
+
+  const { data: respuestas, error } = await supabaseClient
+    .from('foros_respuestas')
+    .select('*')
+    .eq('tema_id', temaId)
+    .order('created_at', { ascending: true });
+
+  if (error || errorTema) { panel.innerHTML = `<p style="color:var(--rojo-error);">Error al cargar el tema.</p>`; return; }
+
+  panel.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+      <h3 style="margin:0;">${tema.titulo}</h3>
+      <div style="display:flex; gap:6px;">
+        <button class="btn btn-secundario" style="font-size:0.75rem; padding:5px 10px;" onclick="alternarEstadoTema('${tema.id}', '${tema.estado}')">${tema.estado === 'activo' ? 'Cerrar tema' : 'Reabrir'}</button>
+        <button class="btn btn-peligro" style="font-size:0.75rem; padding:5px 10px;" onclick="eliminarTema('${tema.id}')">Eliminar tema</button>
+      </div>
+    </div>
+    ${tema.descripcion ? `<p class="texto-ayuda" style="margin-bottom:14px;">${tema.descripcion}</p>` : ''}
+    <div id="hilo-mensajes" style="max-height:320px; overflow-y:auto; margin-bottom:14px;">
+      ${respuestas.length === 0 ? '<p class="texto-ayuda">Aún no hay respuestas.</p>' : respuestas.map(r => `
+        <div class="mensaje-burbuja ${r.autor_tipo === 'instructor' ? 'mensaje-instructor' : 'mensaje-aprendiz'}">
+          <div class="mensaje-autor">${r.autor_nombre}${r.autor_tipo === 'instructor' ? ' (Instructor)' : ''}</div>
+          <div class="mensaje-texto">${r.mensaje}</div>
+          <div class="mensaje-fecha">
+            ${new Date(r.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            <button onclick="eliminarRespuesta('${r.id}')" style="border:none; background:none; color:var(--rojo-error); cursor:pointer; font-size:0.7rem; margin-left:8px;">Eliminar</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="input-respuesta" placeholder="Escribe una respuesta..." onkeydown="if(event.key==='Enter') enviarRespuestaInstructor('${tema.id}')">
+      <button class="btn btn-primario" onclick="enviarRespuestaInstructor('${tema.id}')">Enviar</button>
+    </div>
+  `;
+}
+
+async function enviarRespuestaInstructor(temaId) {
+  const input = document.getElementById('input-respuesta');
+  const mensaje = input.value.trim();
+  if (!mensaje) return;
+
+  const { error } = await supabaseClient.from('foros_respuestas').insert({
+    tema_id: temaId,
+    autor_tipo: 'instructor',
+    autor_nombre: 'Instructor',
+    mensaje,
+  });
+
+  if (error) { alert('Error al enviar: ' + error.message); return; }
+  input.value = '';
+  abrirTema(temaId);
+}
+
+async function alternarEstadoTema(temaId, estadoActual) {
+  const nuevoEstado = estadoActual === 'activo' ? 'cerrado' : 'activo';
+  const { error } = await supabaseClient.from('foros_temas').update({ estado: nuevoEstado }).eq('id', temaId);
+  if (error) { alert('Error: ' + error.message); return; }
+  abrirTema(temaId);
+}
+
+async function eliminarTema(temaId) {
+  if (!confirm('¿Eliminar este tema y todas sus respuestas? No se puede deshacer.')) return;
+  const { error } = await supabaseClient.from('foros_temas').delete().eq('id', temaId);
+  if (error) { alert('Error: ' + error.message); return; }
+  temaSeleccionado = null;
+  document.getElementById('panel-tema').innerHTML = '<p class="texto-ayuda">Elige un tema de la izquierda para ver la discusión.</p>';
+  cargarTemas(document.getElementById('select-ficha').value);
+}
+
+async function eliminarRespuesta(respuestaId) {
+  if (!confirm('¿Eliminar esta respuesta?')) return;
+  const { error } = await supabaseClient.from('foros_respuestas').delete().eq('id', respuestaId);
+  if (error) { alert('Error: ' + error.message); return; }
+  abrirTema(temaSeleccionado);
+}
+
+cargarFichas();
+</script>
+</body>
+</html>
