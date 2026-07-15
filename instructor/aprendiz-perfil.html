@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perfil del aprendiz - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  .cabecera-perfil { display: flex; gap: 20px; align-items: center; margin-bottom: 24px; flex-wrap: wrap; }
+  .foto-grande { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid var(--verde-sena); }
+  .foto-grande-placeholder {
+    width: 100px; height: 100px; border-radius: 50%; background: var(--gris-fondo);
+    display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: var(--gris-texto);
+    border: 3px solid var(--gris-borde);
+  }
+  .tarjeta-metrica { background: var(--gris-fondo); border-radius: 12px; padding: 16px; text-align: center; }
+  .tarjeta-metrica .valor { font-size: 1.8rem; font-weight: 700; margin: 6px 0 2px; }
+  .tarjeta-metrica .etiqueta { font-size: 0.78rem; color: var(--gris-texto); }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .seccion { margin-bottom: 28px; }
+  .seccion h3 { margin-bottom: 12px; font-size: 1rem; }
+  .entrada-mini { border: 1px solid var(--gris-borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; }
+  .entrada-mini .meta { font-size: 0.78rem; color: var(--gris-texto); margin-bottom: 4px; }
+  @media (max-width: 560px) { .grid-3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Fichas</a>
+    <a href="asistencia.html">Asistencia</a>
+    <a href="material.html">Material</a>
+    <a href="examenes.html">Exámenes</a>
+    <a href="foro.html">Foro</a>
+    <a href="calificaciones.html">Calificaciones</a>
+    <a href="reportes.html">Reportes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:760px;">
+  <a href="#" onclick="history.back(); return false;" style="color:var(--gris-texto); font-size:0.85rem; text-decoration:none;">← Volver</a>
+
+  <div class="cabecera-perfil" style="margin-top:16px;">
+    <img id="foto-perfil" class="foto-grande oculto" alt="Foto">
+    <div id="foto-perfil-placeholder" class="foto-grande-placeholder"></div>
+    <div style="flex:1;">
+      <h2 id="nombre-aprendiz" style="margin-bottom:2px;"></h2>
+      <p id="meta-aprendiz" style="color:var(--gris-texto); font-size:0.9rem;"></p>
+    </div>
+    <button class="btn btn-primario" onclick="descargarReporte()">⬇ Descargar reporte</button>
+  </div>
+
+  <div class="tarjeta" style="margin-bottom:20px; text-align:center;">
+    <p class="texto-ayuda" style="margin-bottom:4px;">Nota final ponderada</p>
+    <p id="nota-final-grande" style="font-size:2.4rem; font-weight:700; margin:0;">—</p>
+  </div>
+
+  <div class="grid-3" style="margin-bottom:28px;">
+    <div class="tarjeta-metrica">
+      <div class="etiqueta">Asistencia</div>
+      <div class="valor" id="valor-asistencia">—</div>
+    </div>
+    <div class="tarjeta-metrica">
+      <div class="etiqueta">Foro</div>
+      <div class="valor" id="valor-foro">—</div>
+    </div>
+    <div class="tarjeta-metrica">
+      <div class="etiqueta">Actividades</div>
+      <div class="valor" id="valor-actividades">—</div>
+    </div>
+  </div>
+
+  <div class="seccion">
+    <h3>Historial de asistencia</h3>
+    <div id="lista-asistencia" class="tabla-scroll"><p class="texto-ayuda">Cargando...</p></div>
+  </div>
+
+  <div class="seccion">
+    <h3>Participación en el foro</h3>
+    <div id="lista-foro"><p class="texto-ayuda">Cargando...</p></div>
+  </div>
+
+  <div class="seccion">
+    <h3>Exámenes y actividades</h3>
+    <div id="lista-actividades"><p class="texto-ayuda">Cargando...</p></div>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+requerirSesionInstructor();
+
+const parametros = new URLSearchParams(window.location.search);
+const aprendizId = parametros.get('id');
+
+let datosReporte = {};
+
+async function inicializar() {
+  if (!aprendizId) { window.location.href = 'dashboard.html'; return; }
+
+  const { data: aprendiz, error } = await supabaseClient
+    .from('aprendices')
+    .select('*, fichas(numero_ficha, programa, nombre_grupo, peso_asistencia, peso_foro, peso_actividades, minimo_asistencia_pct)')
+    .eq('id', aprendizId)
+    .single();
+
+  if (error || !aprendiz) {
+    document.getElementById('nombre-aprendiz').textContent = 'Aprendiz no encontrado';
+    return;
+  }
+
+  datosReporte.aprendiz = aprendiz;
+
+  document.getElementById('nombre-aprendiz').textContent = aprendiz.nombre_completo;
+  document.getElementById('meta-aprendiz').textContent =
+    `Documento ${aprendiz.numero_documento} · Ficha ${aprendiz.fichas.numero_ficha}${aprendiz.fichas.nombre_grupo ? ' (' + aprendiz.fichas.nombre_grupo + ')' : ''} · ${aprendiz.fichas.programa}`;
+
+  if (aprendiz.foto_url) {
+    document.getElementById('foto-perfil').src = aprendiz.foto_url;
+    document.getElementById('foto-perfil').classList.remove('oculto');
+    document.getElementById('foto-perfil-placeholder').classList.add('oculto');
+  } else {
+    document.getElementById('foto-perfil-placeholder').textContent = aprendiz.nombre_completo.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
+  }
+
+  await cargarAsistencia(aprendiz);
+  await cargarForo(aprendiz);
+  await cargarActividades(aprendiz.ficha_id);
+  calcularNotaFinal(aprendiz.fichas);
+}
+
+function colorNota(nota) {
+  if (nota >= 80) return 'var(--verde-sena)';
+  if (nota >= 60) return 'var(--amarillo-alerta)';
+  return 'var(--rojo-error)';
+}
+
+async function cargarAsistencia(aprendiz) {
+  const cont = document.getElementById('lista-asistencia');
+  const { data: registros, error } = await supabaseClient
+    .from('asistencia')
+    .select('fecha, estado, observacion, competencias(nombre)')
+    .eq('aprendiz_id', aprendiz.id)
+    .order('fecha', { ascending: false });
+
+  if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
+
+  datosReporte.asistencia = registros || [];
+  const total = (registros || []).length;
+  const presentes = (registros || []).filter(r => r.estado === 'Presente' || r.estado === 'Tarde').length;
+  const pct = total > 0 ? Math.round((presentes / total) * 100) : null;
+
+  document.getElementById('valor-asistencia').textContent = pct !== null ? pct + '%' : '—';
+  if (pct !== null) document.getElementById('valor-asistencia').style.color = colorNota(pct);
+  datosReporte.pctAsistencia = pct;
+
+  if (!registros || registros.length === 0) {
+    cont.innerHTML = '<p class="texto-ayuda">Sin registros de asistencia todavía.</p>';
+    return;
+  }
+
+  cont.innerHTML = `
+    <table>
+      <thead><tr><th>Fecha</th><th>Estado</th><th>Competencia</th><th>Justificación</th></tr></thead>
+      <tbody>
+        ${registros.map(r => `
+          <tr>
+            <td>${new Date(r.fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+            <td><span class="etiqueta ${r.estado === 'Presente' ? 'etiqueta-verde' : r.estado === 'Ausente' ? 'etiqueta-rojo' : 'etiqueta-gris'}">${r.estado}</span></td>
+            <td>${r.competencias?.nombre || '—'}</td>
+            <td>${r.observacion || '—'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function cargarForo(aprendiz) {
+  const cont = document.getElementById('lista-foro');
+  const { data: respuestas, error } = await supabaseClient
+    .from('foros_respuestas')
+    .select('mensaje, calificacion, comentario_instructor, created_at, foros_temas(titulo)')
+    .eq('aprendiz_id', aprendiz.id)
+    .order('created_at', { ascending: false });
+
+  if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
+
+  datosReporte.foro = respuestas || [];
+  const calificadas = (respuestas || []).filter(r => r.calificacion !== null);
+  const notaForo = calificadas.length > 0 ? calificadas.reduce((s, r) => s + r.calificacion, 0) / calificadas.length : null;
+
+  document.getElementById('valor-foro').textContent = notaForo !== null ? Math.round(notaForo) : '—';
+  if (notaForo !== null) document.getElementById('valor-foro').style.color = colorNota(notaForo);
+  datosReporte.notaForo = notaForo;
+
+  if (!respuestas || respuestas.length === 0) {
+    cont.innerHTML = '<p class="texto-ayuda">Sin participaciones en el foro todavía.</p>';
+    return;
+  }
+
+  cont.innerHTML = respuestas.map(r => `
+    <div class="entrada-mini">
+      <div class="meta">${r.foros_temas?.titulo || 'Tema eliminado'} · ${new Date(r.created_at).toLocaleDateString('es-CO')}${r.calificacion !== null ? ` · Nota: ${r.calificacion}` : ''}</div>
+      <p style="font-size:0.9rem; margin:0;">${r.mensaje}</p>
+      ${r.comentario_instructor ? `<p style="font-size:0.82rem; color:var(--verde-oscuro); margin-top:6px;">Comentario: ${r.comentario_instructor}</p>` : ''}
+    </div>
+  `).join('');
+}
+
+async function cargarActividades(fichaId) {
+  const cont = document.getElementById('lista-actividades');
+  const { data: actividades, error } = await supabaseClient
+    .from('examenes')
+    .select('titulo, fecha_inicio, fecha_fin, estado')
+    .eq('ficha_id', fichaId)
+    .order('fecha_inicio', { ascending: false });
+
+  if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
+
+  datosReporte.actividades = actividades || [];
+  const notaActividades = datosReporte.aprendiz.nota_actividades !== null && datosReporte.aprendiz.nota_actividades !== undefined
+    ? parseFloat(datosReporte.aprendiz.nota_actividades) : null;
+  document.getElementById('valor-actividades').textContent = notaActividades !== null ? Math.round(notaActividades) : '—';
+  if (notaActividades !== null) document.getElementById('valor-actividades').style.color = colorNota(notaActividades);
+  datosReporte.notaActividades = notaActividades;
+
+  if (!actividades || actividades.length === 0) {
+    cont.innerHTML = '<p class="texto-ayuda">Sin exámenes ni actividades programadas para esta ficha.</p>';
+    return;
+  }
+
+  cont.innerHTML = actividades.map(a => `
+    <div class="entrada-mini">
+      <p style="font-weight:600; margin:0;">${a.titulo}</p>
+      <p class="meta" style="margin-top:2px;">Del ${a.fecha_inicio || '—'} al ${a.fecha_fin || '—'}</p>
+    </div>
+  `).join('');
+}
+
+function calcularNotaFinal(ficha) {
+  const pesoAsistencia = (ficha.peso_asistencia ?? 30) / 100;
+  const pesoForo = (ficha.peso_foro ?? 20) / 100;
+  const pesoActividades = (ficha.peso_actividades ?? 50) / 100;
+  const minimoAsistencia = ficha.minimo_asistencia_pct ?? 80;
+
+  const notaAsistencia = datosReporte.pctAsistencia === null ? null : (datosReporte.pctAsistencia >= minimoAsistencia ? 100 : 0);
+
+  const componentes = [
+    { nota: notaAsistencia, peso: pesoAsistencia },
+    { nota: datosReporte.notaForo, peso: pesoForo },
+    { nota: datosReporte.notaActividades, peso: pesoActividades },
+  ].filter(c => c.nota !== null && c.nota !== undefined);
+
+  const pesoTotal = componentes.reduce((s, c) => s + c.peso, 0);
+  const notaFinal = pesoTotal > 0 ? componentes.reduce((s, c) => s + c.nota * c.peso, 0) / pesoTotal : null;
+
+  datosReporte.notaFinal = notaFinal;
+  const el = document.getElementById('nota-final-grande');
+  if (notaFinal !== null) {
+    el.textContent = Math.round(notaFinal);
+    el.style.color = colorNota(notaFinal);
+  }
+}
+
+function descargarReporte() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const a = datosReporte.aprendiz;
+  let y = 20;
+
+  doc.setFontSize(16);
+  doc.text('Perfil educativo - AulaSENA', 14, y); y += 10;
+  doc.setFontSize(11);
+  doc.text(`Aprendiz: ${a.nombre_completo}`, 14, y); y += 6;
+  doc.text(`Documento: ${a.numero_documento}`, 14, y); y += 6;
+  doc.text(`Ficha: ${a.fichas.numero_ficha} - ${a.fichas.programa}`, 14, y); y += 6;
+  doc.text(`Nota final: ${datosReporte.notaFinal !== null ? Math.round(datosReporte.notaFinal) : 'Sin datos suficientes'}`, 14, y); y += 10;
+
+  doc.setFontSize(13);
+  doc.text('Resumen', 14, y); y += 7;
+  doc.setFontSize(10);
+  doc.text(`Asistencia: ${datosReporte.pctAsistencia !== null ? datosReporte.pctAsistencia + '%' : 'Sin datos'}`, 14, y); y += 6;
+  doc.text(`Foro: ${datosReporte.notaForo !== null ? Math.round(datosReporte.notaForo) : 'Sin datos'}`, 14, y); y += 6;
+  doc.text(`Actividades: ${datosReporte.notaActividades !== null ? Math.round(datosReporte.notaActividades) : 'Sin datos'}`, 14, y); y += 10;
+
+  doc.setFontSize(13);
+  doc.text('Historial de asistencia', 14, y); y += 7;
+  doc.setFontSize(9);
+  (datosReporte.asistencia || []).slice(0, 25).forEach(r => {
+    if (y > 275) { doc.addPage(); y = 20; }
+    doc.text(`${r.fecha} - ${r.estado} - ${r.competencias?.nombre || 'Sin competencia'}`, 14, y);
+    y += 5;
+  });
+  y += 6;
+
+  if (y > 260) { doc.addPage(); y = 20; }
+  doc.setFontSize(13);
+  doc.text('Participacion en el foro', 14, y); y += 7;
+  doc.setFontSize(9);
+  (datosReporte.foro || []).slice(0, 15).forEach(r => {
+    if (y > 275) { doc.addPage(); y = 20; }
+    const textoMensaje = doc.splitTextToSize(`${r.foros_temas?.titulo || 'Tema'}: ${r.mensaje}`, 180);
+    doc.text(textoMensaje, 14, y);
+    y += textoMensaje.length * 5 + 2;
+  });
+
+  doc.save(`Perfil_${a.nombre_completo.replace(/\s+/g,'_')}.pdf`);
+}
+
+inicializar();
+</script>
+</body>
+</html>
