@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calificaciones - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .barra-nota { background: var(--gris-borde); border-radius: 6px; height: 8px; width: 90px; overflow: hidden; }
+  .barra-nota-interna { height: 100%; border-radius: 6px; }
+  .fila-nota { display: flex; align-items: center; gap: 8px; }
+  input.nota-actividades { width: 70px; padding: 6px 8px; min-height: 32px; font-size: 0.85rem; }
+  .puesto { font-weight: 700; font-size: 0.9rem; width: 24px; display: inline-block; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Fichas</a>
+    <a href="asistencia.html">Asistencia</a>
+    <a href="material.html">Material</a>
+    <a href="examenes.html">Exámenes</a>
+    <a href="foro.html">Foro</a>
+    <a href="calificaciones.html" class="activo">Calificaciones</a>
+    <a href="reportes.html">Reportes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px;">
+  <h2 style="margin-bottom:20px;">Calificaciones</h2>
+
+  <div class="tarjeta" style="margin-bottom:20px;">
+    <div class="campo" style="margin-bottom:0;">
+      <label for="select-ficha">Ficha</label>
+      <select id="select-ficha" onchange="cargarCalificaciones()"></select>
+    </div>
+  </div>
+
+  <div class="tarjeta espaciado-v" style="margin-bottom:20px;">
+    <h3 style="font-size:0.9rem; margin-bottom:4px;">Ponderación de esta ficha</h3>
+    <p class="texto-ayuda" style="margin-top:-4px;">Ajusta los porcentajes si lo necesitas (deben sumar 100).</p>
+    <div class="grid-2">
+      <div class="campo" style="margin-bottom:0;">
+        <label for="peso-asistencia">Asistencia (%)</label>
+        <input type="number" id="peso-asistencia" min="0" max="100">
+      </div>
+      <div class="campo" style="margin-bottom:0;">
+        <label for="peso-foro">Foro (%)</label>
+        <input type="number" id="peso-foro" min="0" max="100">
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="campo" style="margin-bottom:0;">
+        <label for="peso-actividades">Actividades/exámenes (%)</label>
+        <input type="number" id="peso-actividades" min="0" max="100">
+      </div>
+      <div class="campo" style="margin-bottom:0;">
+        <label for="minimo-asistencia">Mínimo de asistencia para aprobar ese rubro (%)</label>
+        <input type="number" id="minimo-asistencia" min="0" max="100">
+      </div>
+    </div>
+    <button class="btn btn-primario" onclick="guardarPesos()">Guardar ponderación</button>
+    <p class="mensaje-error" id="mensaje-pesos" style="background:rgba(57,169,0,0.1); color:var(--verde-oscuro);"></p>
+  </div>
+
+  <div class="tarjeta" style="padding:0;">
+    <div style="padding:16px 20px;">
+      <h3 style="margin:0;">Ranking del grupo</h3>
+    </div>
+    <div class="tabla-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Aprendiz</th>
+            <th>Asistencia</th>
+            <th>Foro</th>
+            <th>Actividades</th>
+            <th>Nota final</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-calificaciones">
+          <tr><td colspan="6" style="text-align:center; color:var(--gris-texto); padding:24px;">Selecciona una ficha.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+requerirSesionInstructor();
+
+let fichaActual = null;
+
+async function cargarFichas() {
+  const { data: fichas, error } = await supabaseClient
+    .from('fichas')
+    .select('id, numero_ficha, programa, nombre_grupo')
+    .order('created_at', { ascending: false });
+
+  const select = document.getElementById('select-ficha');
+  if (error || !fichas || fichas.length === 0) {
+    select.innerHTML = '<option value="">No hay fichas creadas</option>';
+    return;
+  }
+  select.innerHTML = fichas.map(f => `<option value="${f.id}">${f.nombre_grupo ? f.nombre_grupo + ' — ' : ''}Ficha ${f.numero_ficha} · ${f.programa}</option>`).join('');
+
+  const ultimaFichaUsada = localStorage.getItem('aulasena_ultima_ficha');
+  if (ultimaFichaUsada && fichas.some(f => f.id === ultimaFichaUsada)) {
+    select.value = ultimaFichaUsada;
+  }
+  cargarCalificaciones();
+}
+
+function colorNota(nota) {
+  if (nota >= 80) return 'var(--verde-sena)';
+  if (nota >= 60) return 'var(--amarillo-alerta)';
+  return 'var(--rojo-error)';
+}
+
+async function cargarCalificaciones() {
+  const fichaId = document.getElementById('select-ficha').value;
+  const tbody = document.getElementById('tabla-calificaciones');
+  if (!fichaId) return;
+
+  localStorage.setItem('aulasena_ultima_ficha', fichaId);
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:24px;">Cargando...</td></tr>';
+
+  const { data: ficha, error: errorFicha } = await supabaseClient
+    .from('fichas')
+    .select('peso_asistencia, peso_foro, peso_actividades, minimo_asistencia_pct')
+    .eq('id', fichaId)
+    .single();
+
+  if (errorFicha || !ficha) { tbody.innerHTML = `<tr><td colspan="6">Error cargando la ficha.</td></tr>`; return; }
+  fichaActual = ficha;
+
+  document.getElementById('peso-asistencia').value = ficha.peso_asistencia ?? 30;
+  document.getElementById('peso-foro').value = ficha.peso_foro ?? 20;
+  document.getElementById('peso-actividades').value = ficha.peso_actividades ?? 50;
+  document.getElementById('minimo-asistencia').value = ficha.minimo_asistencia_pct ?? 80;
+
+  const { data: aprendices, error: errorAprendices } = await supabaseClient
+    .from('aprendices')
+    .select('id, nombre_completo, nota_actividades')
+    .eq('ficha_id', fichaId)
+    .order('nombre_completo');
+
+  if (errorAprendices || !aprendices) { tbody.innerHTML = `<tr><td colspan="6">Error cargando aprendices.</td></tr>`; return; }
+
+  const { data: asistencias } = await supabaseClient
+    .from('asistencia')
+    .select('aprendiz_id, estado')
+    .eq('ficha_id', fichaId);
+
+  const { data: temasFicha } = await supabaseClient.from('foros_temas').select('id').eq('ficha_id', fichaId);
+  const idsTemas = (temasFicha || []).map(t => t.id);
+  let respuestasForo = [];
+  if (idsTemas.length > 0) {
+    const { data } = await supabaseClient.from('foros_respuestas').select('aprendiz_id, calificacion').in('tema_id', idsTemas).not('calificacion', 'is', null);
+    respuestasForo = data || [];
+  }
+
+  const pesoAsistencia = (ficha.peso_asistencia ?? 30) / 100;
+  const pesoForo = (ficha.peso_foro ?? 20) / 100;
+  const pesoActividades = (ficha.peso_actividades ?? 50) / 100;
+  const minimoAsistencia = ficha.minimo_asistencia_pct ?? 80;
+
+  const filas = aprendices.map(a => {
+    const registrosAsistencia = (asistencias || []).filter(r => r.aprendiz_id === a.id);
+    const totalDias = registrosAsistencia.length;
+    const presentes = registrosAsistencia.filter(r => r.estado === 'Presente' || r.estado === 'Tarde').length;
+    const pctAsistencia = totalDias > 0 ? Math.round((presentes / totalDias) * 100) : null;
+    const notaAsistencia = pctAsistencia === null ? null : (pctAsistencia >= minimoAsistencia ? 100 : 0);
+
+    const notasForo = respuestasForo.filter(r => r.aprendiz_id === a.id).map(r => r.calificacion);
+    const notaForo = notasForo.length > 0 ? (notasForo.reduce((s, n) => s + n, 0) / notasForo.length) : null;
+
+    const notaActividades = a.nota_actividades !== null && a.nota_actividades !== undefined ? parseFloat(a.nota_actividades) : null;
+
+    const componentes = [
+      { nota: notaAsistencia, peso: pesoAsistencia },
+      { nota: notaForo, peso: pesoForo },
+      { nota: notaActividades, peso: pesoActividades },
+    ].filter(c => c.nota !== null);
+
+    const pesoTotal = componentes.reduce((s, c) => s + c.peso, 0);
+    const notaFinal = pesoTotal > 0 ? componentes.reduce((s, c) => s + c.nota * c.peso, 0) / pesoTotal : null;
+
+    return { id: a.id, nombre: a.nombre_completo, pctAsistencia, notaForo, notaActividades, notaFinal };
+  });
+
+  filas.sort((x, y) => (y.notaFinal ?? -1) - (x.notaFinal ?? -1));
+
+  tbody.innerHTML = filas.map((f, i) => `
+    <tr>
+      <td><span class="puesto">${i + 1}</span></td>
+      <td>${f.nombre}</td>
+      <td>${f.pctAsistencia !== null ? f.pctAsistencia + '%' : '—'}</td>
+      <td>${f.notaForo !== null ? Math.round(f.notaForo) : '—'}</td>
+      <td><input type="number" class="nota-actividades" min="0" max="100" value="${f.notaActividades ?? ''}" placeholder="0-100" onchange="guardarNotaActividades('${f.id}', this.value)"></td>
+      <td>
+        ${f.notaFinal !== null ? `
+          <div class="fila-nota">
+            <div class="barra-nota"><div class="barra-nota-interna" style="width:${Math.round(f.notaFinal)}%; background:${colorNota(f.notaFinal)};"></div></div>
+            <strong>${Math.round(f.notaFinal)}</strong>
+          </div>
+        ` : '<span style="color:var(--gris-texto);">Sin datos</span>'}
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function guardarNotaActividades(aprendizId, valor) {
+  const nota = valor === '' ? null : parseFloat(valor);
+  const { error } = await supabaseClient.from('aprendices').update({ nota_actividades: nota }).eq('id', aprendizId);
+  if (error) { alert('Error: ' + error.message); return; }
+  cargarCalificaciones();
+}
+
+async function guardarPesos() {
+  const fichaId = document.getElementById('select-ficha').value;
+  if (!fichaId) return;
+
+  const pesoAsistencia = parseInt(document.getElementById('peso-asistencia').value) || 0;
+  const pesoForo = parseInt(document.getElementById('peso-foro').value) || 0;
+  const pesoActividades = parseInt(document.getElementById('peso-actividades').value) || 0;
+  const minimoAsistencia = parseInt(document.getElementById('minimo-asistencia').value) || 0;
+
+  const { error } = await supabaseClient
+    .from('fichas')
+    .update({
+      peso_asistencia: pesoAsistencia,
+      peso_foro: pesoForo,
+      peso_actividades: pesoActividades,
+      minimo_asistencia_pct: minimoAsistencia,
+    })
+    .eq('id', fichaId);
+
+  const mensaje = document.getElementById('mensaje-pesos');
+  if (error) {
+    mensaje.style.background = 'rgba(214,69,69,0.1)';
+    mensaje.style.color = 'var(--rojo-error)';
+    mensaje.textContent = 'Error: ' + error.message;
+  } else {
+    mensaje.style.background = 'rgba(57,169,0,0.1)';
+    mensaje.style.color = 'var(--verde-oscuro)';
+    mensaje.textContent = 'Ponderación guardada ✓';
+    cargarCalificaciones();
+  }
+  mensaje.classList.add('visible');
+  setTimeout(() => mensaje.classList.remove('visible'), 3000);
+}
+
+cargarFichas();
+</script>
+</body>
+</html>

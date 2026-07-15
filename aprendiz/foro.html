@@ -7,30 +7,64 @@
 <link rel="stylesheet" href="../css/styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  .tema-tarjeta {
-    padding: 14px 16px;
+  .banner-normas {
+    position: relative;
+    background: var(--azul-sena);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    min-height: 220px;
+    margin-bottom: 6px;
+  }
+  .banner-normas .texto { flex: 1; padding: 24px 20px 24px 28px; position: relative; z-index: 2; }
+  .banner-normas .etiqueta { font-size: 11px; font-weight: 600; color: #7FDDB0; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 8px; }
+  .banner-normas .regla { display: flex; gap: 8px; margin-bottom: 9px; }
+  .banner-normas .regla span.num { color: #7FDDB0; font-weight: 600; font-size: 12px; flex-shrink: 0; }
+  .banner-normas .regla p { font-size: 12px; color: #E6F1FB; margin: 0; line-height: 1.5; }
+  .banner-normas .grafico { width: 110px; flex-shrink: 0; }
+  .nota-pie { font-size: 10px; color: var(--gris-texto); text-align: center; margin: 0 0 20px; }
+
+  .bloque-tema {
     border: 1px solid var(--gris-borde);
-    border-radius: 10px;
-    cursor: pointer;
-    margin-bottom: 10px;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    background: var(--gris-fondo);
+  }
+  .bloque-tema .etiqueta { font-size: 11px; font-weight: 600; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 6px; }
+
+  .entrada-foro {
+    border: 1px solid var(--gris-borde);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
     background: var(--blanco);
   }
-  .tema-tarjeta:hover { border-color: var(--verde-sena); }
-  .tema-tarjeta.seleccionado { border-color: var(--verde-sena); background: rgba(57,169,0,0.04); }
-  .tema-titulo { font-weight: 600; }
-  .tema-meta { font-size: 0.78rem; color: var(--gris-texto); margin-top: 4px; }
-  .mensaje-burbuja {
-    padding: 10px 14px;
-    border-radius: 10px;
-    margin-bottom: 10px;
-    max-width: 85%;
+  .entrada-foro.entrada-instructor { border-color: #97C459; background: #EAF3DE; }
+  .entrada-foro.entrada-propia { border-color: var(--verde-sena); }
+  .entrada-cabecera { display: flex; gap: 10px; align-items: flex-start; }
+  .avatar-iniciales {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; flex-shrink: 0;
+    background: #E6F1FB; color: #0C447C;
   }
-  .mensaje-instructor { background: rgba(0,48,77,0.08); }
-  .mensaje-aprendiz { background: var(--gris-fondo); margin-left: auto; }
-  .mensaje-propio { background: rgba(57,169,0,0.1); margin-left: auto; }
-  .mensaje-autor { font-size: 0.78rem; font-weight: 700; color: var(--azul-sena); margin-bottom: 2px; }
-  .mensaje-texto { font-size: 0.9rem; }
-  .mensaje-fecha { font-size: 0.7rem; color: var(--gris-texto); margin-top: 4px; }
+  .entrada-instructor .avatar-iniciales { background: #639922; color: #FFFFFF; }
+  .entrada-nombre { font-size: 13px; font-weight: 600; margin: 0; }
+  .entrada-fecha { font-size: 11px; color: var(--gris-texto); margin: 0; }
+  .entrada-texto { font-size: 14px; margin: 6px 0 4px; line-height: 1.6; }
+
+  .caja-comentario {
+    background: #FAEEDA;
+    border-left: 3px solid #BA7517;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 8px;
+  }
+  .caja-comentario .titulo { font-size: 10px; font-weight: 600; color: #854F0B; text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 2px; }
+  .caja-comentario p.texto { font-size: 13px; color: #633806; margin: 0; }
+
+  .nota-entrada { font-size: 11px; color: var(--verde-oscuro); font-weight: 600; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -46,17 +80,35 @@
   <button class="btn-salir" onclick="cerrarSesionAprendiz()">Salir</button>
 </div>
 
-<div class="contenedor" style="padding-top:32px; padding-bottom:48px;">
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:720px;">
   <h2 style="margin-bottom:4px;">Foro de discusión</h2>
-  <p id="info-ficha" style="color:var(--gris-texto); margin-bottom:24px;"></p>
+  <p id="info-ficha" style="color:var(--gris-texto); margin-bottom:20px;"></p>
 
-  <div class="grid-2" style="align-items:start;">
-    <div id="lista-temas"><p class="texto-ayuda">Cargando temas...</p></div>
-
-    <div class="tarjeta" id="panel-tema" style="min-height:300px;">
-      <p class="texto-ayuda">Elige un tema de la izquierda para ver la discusión.</p>
+  <div class="banner-normas">
+    <div class="texto">
+      <p class="etiqueta">Normas del foro</p>
+      <div class="regla"><span class="num">1.</span><p>Lee bien el tema antes de participar.</p></div>
+      <div class="regla"><span class="num">2.</span><p>Responde con tus propias palabras, sin copiar a un compañero.</p></div>
+      <div class="regla"><span class="num">3.</span><p>Usa un lenguaje respetuoso con tus compañeros e instructor.</p></div>
+      <div class="regla"><span class="num">4.</span><p>Si tienes dudas, pregúntale directamente al instructor aquí mismo.</p></div>
+      <div class="regla"><span class="num">5.</span><p>Participa dentro del plazo que indique tu instructor.</p></div>
+    </div>
+    <div class="grafico">
+      <svg width="110" height="220" viewBox="0 0 110 220">
+        <polygon points="30,0 110,0 110,220 0,220" fill="#39A900"></polygon>
+        <polygon points="55,0 80,0 48,220 24,220" fill="#2d7d00"></polygon>
+        <circle cx="70" cy="95" r="27" fill="none" stroke="#FFFFFF" stroke-width="5" opacity="0.9"></circle>
+        <circle cx="70" cy="95" r="8" fill="#FFFFFF" opacity="0.9"></circle>
+        <rect x="66" y="55" width="8" height="13" fill="#FFFFFF" opacity="0.9"></rect>
+        <rect x="66" y="122" width="8" height="13" fill="#FFFFFF" opacity="0.9"></rect>
+      </svg>
     </div>
   </div>
+  <p class="nota-pie">Estas normas aplican a todos los foros</p>
+
+  <div id="lista-temas" style="margin-bottom:20px;"><p class="texto-ayuda">Cargando temas...</p></div>
+
+  <div id="panel-tema"></div>
 </div>
 
 <script src="../js/supabase-config.js"></script>
@@ -75,27 +127,23 @@ async function cargarTemas() {
   const cont = document.getElementById('lista-temas');
   const { data: temas, error } = await supabaseClient
     .from('foros_temas')
-    .select('id, titulo, descripcion, estado, created_at')
+    .select('id, titulo, estado, created_at')
     .eq('ficha_id', sesion.ficha_id)
     .order('created_at', { ascending: false });
 
   if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
   if (!temas || temas.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Tu instructor aún no ha creado ningún tema de discusión.</p>'; return; }
 
-  const { data: respuestas } = await supabaseClient
-    .from('foros_respuestas')
-    .select('tema_id')
-    .in('tema_id', temas.map(t => t.id));
-
-  const conteos = {};
-  (respuestas || []).forEach(r => conteos[r.tema_id] = (conteos[r.tema_id] || 0) + 1);
-
-  cont.innerHTML = temas.map(t => `
-    <div class="tema-tarjeta ${temaSeleccionado === t.id ? 'seleccionado' : ''}" onclick="abrirTema('${t.id}')">
-      <div class="tema-titulo">${t.titulo} ${t.estado === 'cerrado' ? '<span class="etiqueta etiqueta-gris">Cerrado</span>' : ''}</div>
-      <div class="tema-meta">${conteos[t.id] || 0} respuesta(s) · ${new Date(t.created_at).toLocaleDateString('es-CO')}</div>
+  cont.innerHTML = `
+    <p class="texto-ayuda" style="margin-bottom:8px;">Temas de tu ficha:</p>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;">
+      ${temas.map(t => `
+        <button onclick="abrirTema('${t.id}')" class="btn ${temaSeleccionado === t.id ? 'btn-primario' : 'btn-secundario'}" style="font-size:0.8rem; padding:7px 12px;">
+          ${t.titulo} ${t.estado === 'cerrado' ? '🔒' : ''}
+        </button>
+      `).join('')}
     </div>
-  `).join('');
+  `;
 }
 
 async function abrirTema(temaId) {
@@ -105,12 +153,7 @@ async function abrirTema(temaId) {
   const panel = document.getElementById('panel-tema');
   panel.innerHTML = '<p class="texto-ayuda">Cargando...</p>';
 
-  const { data: tema, error: errorTema } = await supabaseClient
-    .from('foros_temas')
-    .select('*')
-    .eq('id', temaId)
-    .single();
-
+  const { data: tema, error: errorTema } = await supabaseClient.from('foros_temas').select('*').eq('id', temaId).single();
   const { data: respuestas, error } = await supabaseClient
     .from('foros_respuestas')
     .select('*')
@@ -120,24 +163,57 @@ async function abrirTema(temaId) {
   if (error || errorTema) { panel.innerHTML = `<p style="color:var(--rojo-error);">Error al cargar el tema.</p>`; return; }
 
   panel.innerHTML = `
-    <h3 style="margin-bottom:6px;">${tema.titulo}</h3>
-    ${tema.descripcion ? `<p class="texto-ayuda" style="margin-bottom:14px;">${tema.descripcion}</p>` : ''}
-    <div id="hilo-mensajes" style="max-height:320px; overflow-y:auto; margin-bottom:14px;">
-      ${respuestas.length === 0 ? '<p class="texto-ayuda">Sé el primero en responder.</p>' : respuestas.map(r => `
-        <div class="mensaje-burbuja ${r.autor_tipo === 'instructor' ? 'mensaje-instructor' : (r.aprendiz_id === sesion.id ? 'mensaje-propio' : 'mensaje-aprendiz')}">
-          <div class="mensaje-autor">${r.autor_nombre}${r.autor_tipo === 'instructor' ? ' (Instructor)' : ''}</div>
-          <div class="mensaje-texto">${r.mensaje}</div>
-          <div class="mensaje-fecha">${new Date(r.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
-        </div>
-      `).join('')}
+    <div class="bloque-tema">
+      <p class="etiqueta">Tema de este foro</p>
+      <p style="font-size:1rem; font-weight:600; margin:0;">${tema.titulo}</p>
+      ${tema.descripcion ? `<p style="font-size:0.85rem; color:var(--gris-texto); margin:4px 0 0;">${tema.descripcion}</p>` : ''}
     </div>
+
+    <p class="texto-ayuda" style="margin-bottom:10px;">${respuestas.length} participación(es)</p>
+
+    <div id="lista-entradas">
+      ${respuestas.length === 0 ? '<p class="texto-ayuda">Sé el primero en participar.</p>' : respuestas.map(r => renderizarEntrada(r)).join('')}
+    </div>
+
     ${tema.estado === 'cerrado'
-      ? '<p class="texto-ayuda">Este tema está cerrado, ya no se pueden agregar respuestas.</p>'
-      : `<div style="display:flex; gap:8px;">
-          <input type="text" id="input-respuesta" placeholder="Escribe tu respuesta..." onkeydown="if(event.key==='Enter') enviarRespuesta('${tema.id}')">
-          <button class="btn btn-primario" onclick="enviarRespuesta('${tema.id}')">Enviar</button>
+      ? '<p class="texto-ayuda">Este tema está cerrado, ya no se pueden agregar participaciones.</p>'
+      : `<div class="tarjeta" style="margin-top:10px;">
+          <textarea id="input-respuesta" rows="2" placeholder="Escribe tu participación..." style="border:none; padding:0; resize:none;"></textarea>
+          <div style="text-align:right; margin-top:8px;">
+            <button class="btn btn-primario" onclick="enviarRespuesta('${tema.id}')">Publicar</button>
+          </div>
         </div>`
     }
+  `;
+}
+
+function renderizarEntrada(r) {
+  const iniciales = r.autor_nombre.split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
+  const esInstructor = r.autor_tipo === 'instructor';
+  const esPropia = r.aprendiz_id === sesion.id;
+  // El comentario y la nota del instructor solo se muestran en las entradas del propio aprendiz
+  const mostrarRetro = esPropia && (r.comentario_instructor || r.calificacion !== null);
+
+  return `
+    <div class="entrada-foro ${esInstructor ? 'entrada-instructor' : ''} ${esPropia ? 'entrada-propia' : ''}">
+      <div class="entrada-cabecera">
+        <div class="avatar-iniciales">${iniciales}</div>
+        <div style="flex:1;">
+          <div style="display:flex; justify-content:space-between; align-items:baseline;">
+            <p class="entrada-nombre">${r.autor_nombre}${esInstructor ? ' · Instructor' : ''}</p>
+            <p class="entrada-fecha">${new Date(r.created_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+          </div>
+          <p class="entrada-texto">${r.mensaje}</p>
+          ${mostrarRetro && r.calificacion !== null ? `<p class="nota-entrada">Nota: ${r.calificacion}</p>` : ''}
+          ${mostrarRetro && r.comentario_instructor ? `
+            <div class="caja-comentario">
+              <p class="titulo">Comentario del instructor</p>
+              <p class="texto">${r.comentario_instructor}</p>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -155,7 +231,6 @@ async function enviarRespuesta(temaId) {
   });
 
   if (error) { alert('Error al enviar: ' + error.message); return; }
-  input.value = '';
   abrirTema(temaId);
 }
 

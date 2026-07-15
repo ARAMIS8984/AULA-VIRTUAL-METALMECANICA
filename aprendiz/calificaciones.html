@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mis calificaciones - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .tarjeta-metrica { background: var(--gris-fondo); border-radius: 12px; padding: 16px; text-align: center; }
+  .tarjeta-metrica .valor { font-size: 1.8rem; font-weight: 700; margin: 6px 0 2px; }
+  .tarjeta-metrica .etiqueta { font-size: 0.78rem; color: var(--gris-texto); }
+  .tarjeta-metrica .peso { font-size: 0.7rem; color: var(--gris-texto); }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .barra-nota-grande { background: var(--gris-borde); border-radius: 10px; height: 16px; overflow: hidden; margin-top: 10px; }
+  .barra-nota-grande-interna { height: 100%; border-radius: 10px; transition: width 0.4s; }
+  @media (max-width: 560px) { .grid-3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Inicio</a>
+    <a href="material.html">Material</a>
+    <a href="foro.html">Foro</a>
+    <a href="calificaciones.html" class="activo">Mis calificaciones</a>
+    <a href="examenes.html">Exámenes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionAprendiz()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:700px;">
+  <h2 style="margin-bottom:4px;">Mis calificaciones</h2>
+  <p id="info-ficha" style="color:var(--gris-texto); margin-bottom:24px;"></p>
+
+  <div class="tarjeta" style="margin-bottom:20px; text-align:center;">
+    <p class="texto-ayuda" style="margin-bottom:4px;">Nota final ponderada</p>
+    <p id="nota-final-grande" style="font-size:2.6rem; font-weight:700; margin:0;">—</p>
+    <div class="barra-nota-grande"><div class="barra-nota-grande-interna" id="barra-final"></div></div>
+  </div>
+
+  <div class="grid-3" style="margin-bottom:20px;">
+    <div class="tarjeta-metrica">
+      <div class="etiqueta">Asistencia</div>
+      <div class="valor" id="valor-asistencia">—</div>
+      <div class="peso" id="peso-asistencia-texto"></div>
+    </div>
+    <div class="tarjeta-metrica">
+      <div class="etiqueta">Foro</div>
+      <div class="valor" id="valor-foro">—</div>
+      <div class="peso" id="peso-foro-texto"></div>
+    </div>
+    <div class="tarjeta-metrica">
+      <div class="etiqueta">Actividades</div>
+      <div class="valor" id="valor-actividades">—</div>
+      <div class="peso" id="peso-actividades-texto"></div>
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <p class="texto-ayuda" id="nota-explicacion" style="margin:0;"></p>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+const sesion = requerirSesionAprendiz();
+
+function colorNota(nota) {
+  if (nota >= 80) return 'var(--verde-sena)';
+  if (nota >= 60) return 'var(--amarillo-alerta)';
+  return 'var(--rojo-error)';
+}
+
+async function inicializar() {
+  if (!sesion) return;
+  document.getElementById('info-ficha').textContent = `Ficha ${sesion.numero_ficha} · ${sesion.programa}`;
+
+  const { data: ficha, error: errorFicha } = await supabaseClient
+    .from('fichas')
+    .select('peso_asistencia, peso_foro, peso_actividades, minimo_asistencia_pct')
+    .eq('id', sesion.ficha_id)
+    .single();
+
+  if (errorFicha || !ficha) return;
+
+  const pesoAsistencia = ficha.peso_asistencia ?? 30;
+  const pesoForo = ficha.peso_foro ?? 20;
+  const pesoActividades = ficha.peso_actividades ?? 50;
+  const minimoAsistencia = ficha.minimo_asistencia_pct ?? 80;
+
+  document.getElementById('peso-asistencia-texto').textContent = `Vale ${pesoAsistencia}% de la nota`;
+  document.getElementById('peso-foro-texto').textContent = `Vale ${pesoForo}% de la nota`;
+  document.getElementById('peso-actividades-texto').textContent = `Vale ${pesoActividades}% de la nota`;
+
+  // Asistencia
+  const { data: registrosAsistencia } = await supabaseClient
+    .from('asistencia')
+    .select('estado')
+    .eq('aprendiz_id', sesion.id);
+
+  const totalDias = (registrosAsistencia || []).length;
+  const presentes = (registrosAsistencia || []).filter(r => r.estado === 'Presente' || r.estado === 'Tarde').length;
+  const pctAsistencia = totalDias > 0 ? Math.round((presentes / totalDias) * 100) : null;
+  const notaAsistencia = pctAsistencia === null ? null : (pctAsistencia >= minimoAsistencia ? 100 : 0);
+
+  document.getElementById('valor-asistencia').textContent = pctAsistencia !== null ? pctAsistencia + '%' : '—';
+  document.getElementById('valor-asistencia').style.color = pctAsistencia !== null ? colorNota(pctAsistencia) : 'var(--negro-texto)';
+
+  // Foro
+  const { data: temasFicha } = await supabaseClient.from('foros_temas').select('id').eq('ficha_id', sesion.ficha_id);
+  const idsTemas = (temasFicha || []).map(t => t.id);
+  let notaForo = null;
+  if (idsTemas.length > 0) {
+    const { data: respuestas } = await supabaseClient
+      .from('foros_respuestas')
+      .select('calificacion')
+      .eq('aprendiz_id', sesion.id)
+      .in('tema_id', idsTemas)
+      .not('calificacion', 'is', null);
+    if (respuestas && respuestas.length > 0) {
+      notaForo = respuestas.reduce((s, r) => s + r.calificacion, 0) / respuestas.length;
+    }
+  }
+  document.getElementById('valor-foro').textContent = notaForo !== null ? Math.round(notaForo) : '—';
+  if (notaForo !== null) document.getElementById('valor-foro').style.color = colorNota(notaForo);
+
+  // Actividades
+  const { data: aprendiz } = await supabaseClient.from('aprendices').select('nota_actividades').eq('id', sesion.id).single();
+  const notaActividades = aprendiz && aprendiz.nota_actividades !== null ? parseFloat(aprendiz.nota_actividades) : null;
+  document.getElementById('valor-actividades').textContent = notaActividades !== null ? Math.round(notaActividades) : '—';
+  if (notaActividades !== null) document.getElementById('valor-actividades').style.color = colorNota(notaActividades);
+
+  // Nota final ponderada (solo con los componentes que ya tienen datos)
+  const componentes = [
+    { nota: notaAsistencia, peso: pesoAsistencia / 100 },
+    { nota: notaForo, peso: pesoForo / 100 },
+    { nota: notaActividades, peso: pesoActividades / 100 },
+  ].filter(c => c.nota !== null);
+
+  const pesoTotal = componentes.reduce((s, c) => s + c.peso, 0);
+  const notaFinal = pesoTotal > 0 ? componentes.reduce((s, c) => s + c.nota * c.peso, 0) / pesoTotal : null;
+
+  if (notaFinal !== null) {
+    document.getElementById('nota-final-grande').textContent = Math.round(notaFinal);
+    document.getElementById('nota-final-grande').style.color = colorNota(notaFinal);
+    document.getElementById('barra-final').style.width = Math.round(notaFinal) + '%';
+    document.getElementById('barra-final').style.background = colorNota(notaFinal);
+  }
+
+  document.getElementById('nota-explicacion').textContent =
+    `Tu nota se calcula así: Asistencia (${pesoAsistencia}%) + Foro (${pesoForo}%) + Actividades (${pesoActividades}%). Para que la asistencia cuente completa, necesitas al menos ${minimoAsistencia}%. Si algún componente aún no tiene datos, la nota final se calcula solo con lo disponible.`;
+}
+
+inicializar();
+</script>
+</body>
+</html>

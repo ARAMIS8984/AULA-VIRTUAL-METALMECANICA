@@ -18,6 +18,7 @@
     <a href="material.html">Material</a>
     <a href="examenes.html">Exámenes</a>
     <a href="foro.html">Foro</a>
+    <a href="calificaciones.html">Calificaciones</a>
     <a href="reportes.html">Reportes</a>
   </nav>
   <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
@@ -85,6 +86,18 @@
         </div>
       </details>
 
+      <div class="campo" style="border-top:1px solid var(--gris-borde); padding-top:16px;">
+        <label for="select-competencia-defecto">Competencia principal de este grupo</label>
+        <p class="texto-ayuda" style="margin-top:-4px; margin-bottom:8px;">Se usará automáticamente cada vez que tomes asistencia — no la tendrás que elegir de nuevo.</p>
+        <select id="select-competencia-defecto" onchange="mostrarResultadosDefecto()">
+          <option value="">Sin especificar (la elijo después)</option>
+        </select>
+      </div>
+      <div class="campo" id="campo-resultados-defecto" style="display:none;">
+        <label>Resultados de aprendizaje que trabaja este grupo</label>
+        <div id="checks-resultados-defecto" style="border:1px solid var(--gris-borde); border-radius:8px; padding:10px 12px; max-height:140px; overflow-y:auto;"></div>
+      </div>
+
       <div class="fila-acciones">
         <button class="btn btn-primario" id="btn-confirmar" onclick="guardarFicha()">Confirmar y crear ficha</button>
         <button class="btn btn-secundario" onclick="reiniciar()">Cancelar</button>
@@ -150,7 +163,37 @@ function mostrarVistaPrevia(datos) {
   `).join('');
   document.getElementById('tabla-aprendices').innerHTML = filas;
 
+  const selectCompetencia = document.getElementById('select-competencia-defecto');
+  selectCompetencia.innerHTML = '<option value="">Sin especificar (la elijo después)</option>' +
+    datos.competencias.map((c, i) => `<option value="${i}">${c.nombre}</option>`).join('');
+  document.getElementById('campo-resultados-defecto').style.display = 'none';
+
   document.getElementById('vista-previa').classList.remove('oculto');
+}
+
+function mostrarResultadosDefecto() {
+  const indice = document.getElementById('select-competencia-defecto').value;
+  const campo = document.getElementById('campo-resultados-defecto');
+  const cont = document.getElementById('checks-resultados-defecto');
+
+  if (indice === '' || !datosParsed) {
+    campo.style.display = 'none';
+    return;
+  }
+
+  const competencia = datosParsed.competencias[parseInt(indice)];
+  if (!competencia.resultados_aprendizaje || competencia.resultados_aprendizaje.length === 0) {
+    campo.style.display = 'none';
+    return;
+  }
+
+  cont.innerHTML = competencia.resultados_aprendizaje.map((ra, i) => `
+    <label style="display:flex; align-items:flex-start; gap:8px; padding:5px 0; font-weight:400; font-size:0.85rem; cursor:pointer;">
+      <input type="checkbox" class="check-ra-defecto" value="${ra.replace(/"/g, '&quot;')}" style="margin-top:3px;">
+      <span>${ra}</span>
+    </label>
+  `).join('');
+  campo.style.display = 'block';
 }
 
 function reiniciar() {
@@ -208,6 +251,10 @@ async function guardarFicha() {
     if (errorAprendices) throw new Error(errorAprendices.message);
 
     // 3. Insertar competencias y sus resultados de aprendizaje
+    //    (y armar un mapa de nombre -> id para poder fijar el predeterminado)
+    const mapaCompetenciaId = {};
+    const mapaResultadoId = {};
+
     for (const comp of datosParsed.competencias) {
       const { data: competenciaCreada, error: errorComp } = await supabaseClient
         .from('competencias')
@@ -216,14 +263,31 @@ async function guardarFicha() {
         .single();
       if (errorComp) throw new Error(errorComp.message);
 
+      mapaCompetenciaId[comp.nombre] = competenciaCreada.id;
+
       if (comp.resultados_aprendizaje.length > 0) {
         const raPayload = comp.resultados_aprendizaje.map(nombreRA => ({
           competencia_id: competenciaCreada.id,
           nombre: nombreRA,
         }));
-        const { error: errorRA } = await supabaseClient.from('resultados_aprendizaje').insert(raPayload);
+        const { data: raCreados, error: errorRA } = await supabaseClient.from('resultados_aprendizaje').insert(raPayload).select();
         if (errorRA) throw new Error(errorRA.message);
+        (raCreados || []).forEach(r => mapaResultadoId[r.nombre] = r.id);
       }
+    }
+
+    // 4. Fijar la competencia y resultados predeterminados de esta ficha, si se eligieron
+    const indiceCompetenciaDefecto = document.getElementById('select-competencia-defecto').value;
+    if (indiceCompetenciaDefecto !== '') {
+      const competenciaElegida = datosParsed.competencias[parseInt(indiceCompetenciaDefecto)];
+      const competenciaDefectoId = mapaCompetenciaId[competenciaElegida.nombre];
+      const resultadosElegidos = Array.from(document.querySelectorAll('.check-ra-defecto:checked')).map(el => mapaResultadoId[el.value]).filter(Boolean);
+
+      const { error: errorDefecto } = await supabaseClient
+        .from('fichas')
+        .update({ competencia_defecto_id: competenciaDefectoId, resultados_defecto: resultadosElegidos })
+        .eq('id', ficha.id);
+      if (errorDefecto) throw new Error(errorDefecto.message);
     }
 
     window.location.href = `ficha-detalle.html?id=${ficha.id}`;
