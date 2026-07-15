@@ -64,7 +64,7 @@
     <h3 style="margin-bottom:14px;">Aprendices (<span id="conteo-aprendices">0</span>)</h3>
     <div style="max-height:420px; overflow-y:auto;" class="tabla-scroll">
       <table>
-        <thead><tr><th>Nombre</th><th>Documento</th><th>Estado</th></tr></thead>
+        <thead><tr><th></th><th>Nombre</th><th>Documento</th><th>Estado</th></tr></thead>
         <tbody id="tabla-aprendices"></tbody>
       </table>
     </div>
@@ -109,7 +109,7 @@ async function cargarDetalleFicha() {
 
   const { data: aprendices, error: errorAprendices } = await supabaseClient
     .from('aprendices')
-    .select('nombre_completo, numero_documento, estado')
+    .select('nombre_completo, numero_documento, estado, foto_url')
     .eq('ficha_id', fichaId)
     .order('nombre_completo');
 
@@ -118,6 +118,10 @@ async function cargarDetalleFicha() {
   document.getElementById('conteo-aprendices').textContent = aprendices.length;
   document.getElementById('tabla-aprendices').innerHTML = aprendices.map(a => `
     <tr>
+      <td>${a.foto_url
+          ? `<img src="${a.foto_url}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">`
+          : `<div style="width:36px;height:36px;border-radius:50%;background:var(--gris-fondo);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--gris-texto);">${a.nombre_completo.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase()}</div>`
+        }</td>
       <td>${a.nombre_completo}</td>
       <td>${a.numero_documento}</td>
       <td><span class="etiqueta etiqueta-verde">${a.estado}</span></td>

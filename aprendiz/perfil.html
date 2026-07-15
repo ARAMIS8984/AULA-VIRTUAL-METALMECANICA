@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi perfil - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .foto-perfil {
+    width: 140px; height: 140px; border-radius: 50%;
+    object-fit: cover; border: 3px solid var(--verde-sena);
+    display: block; margin: 0 auto 16px;
+    background: var(--gris-fondo);
+  }
+  .foto-placeholder {
+    width: 140px; height: 140px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--gris-fondo); color: var(--gris-texto);
+    font-size: 0.8rem; text-align: center; margin: 0 auto 16px;
+    border: 3px dashed var(--gris-borde);
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Inicio</a>
+    <a href="material.html">Material</a>
+    <a href="foro.html">Foro</a>
+    <a href="calificaciones.html">Mis calificaciones</a>
+    <a href="examenes.html">Exámenes</a>
+    <a href="perfil.html" class="activo">Mi perfil</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionAprendiz()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:480px;">
+  <h2 style="margin-bottom:4px; text-align:center;">Mi perfil</h2>
+  <p id="info-ficha" style="color:var(--gris-texto); margin-bottom:24px; text-align:center;"></p>
+
+  <div class="tarjeta" style="text-align:center;">
+    <img id="foto-actual" class="foto-perfil oculto" alt="Foto de perfil">
+    <div id="foto-placeholder" class="foto-placeholder">Sin foto todavía</div>
+
+    <p class="texto-ayuda" style="margin-bottom:12px;">Sube una foto tuya con el uniforme de trabajo, para que tu instructor pueda identificarte.</p>
+
+    <input type="file" id="input-foto" accept="image/*" capture="user" class="oculto">
+    <button class="btn btn-primario" style="width:100%;" onclick="document.getElementById('input-foto').click()">📷 Subir/cambiar foto</button>
+
+    <div class="mensaje-error" id="mensaje-error"></div>
+    <div class="mensaje-error" id="mensaje-exito" style="background:rgba(57,169,0,0.1); color:var(--verde-oscuro);"></div>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+const sesion = requerirSesionAprendiz();
+
+async function inicializar() {
+  if (!sesion) return;
+  document.getElementById('info-ficha').textContent = `${sesion.nombre} · Ficha ${sesion.numero_ficha}`;
+
+  const { data: aprendiz, error } = await supabaseClient
+    .from('aprendices')
+    .select('foto_url')
+    .eq('id', sesion.id)
+    .single();
+
+  if (!error && aprendiz && aprendiz.foto_url) {
+    mostrarFoto(aprendiz.foto_url);
+  }
+}
+
+function mostrarFoto(url) {
+  const img = document.getElementById('foto-actual');
+  img.src = url;
+  img.classList.remove('oculto');
+  document.getElementById('foto-placeholder').classList.add('oculto');
+}
+
+document.getElementById('input-foto').addEventListener('change', async (e) => {
+  const archivo = e.target.files[0];
+  if (!archivo) return;
+  ocultarMensajes();
+
+  try {
+    const extension = archivo.name.split('.').pop();
+    const rutaArchivo = `${sesion.id}/${Date.now()}.${extension}`;
+
+    const { error: errorSubida } = await supabaseClient
+      .storage
+      .from('fotos-aprendices')
+      .upload(rutaArchivo, archivo, { upsert: true });
+
+    if (errorSubida) throw new Error(errorSubida.message);
+
+    const { data: urlPublica } = supabaseClient
+      .storage
+      .from('fotos-aprendices')
+      .getPublicUrl(rutaArchivo);
+
+    const { error: errorUpdate } = await supabaseClient
+      .from('aprendices')
+      .update({ foto_url: urlPublica.publicUrl })
+      .eq('id', sesion.id);
+
+    if (errorUpdate) throw new Error(errorUpdate.message);
+
+    mostrarFoto(urlPublica.publicUrl);
+    mostrarExito('Foto actualizada correctamente.');
+  } catch (err) {
+    mostrarError('Error al subir la foto: ' + err.message);
+  }
+});
+
+function mostrarError(texto) {
+  const el = document.getElementById('mensaje-error');
+  el.textContent = texto;
+  el.classList.add('visible');
+}
+function mostrarExito(texto) {
+  const el = document.getElementById('mensaje-exito');
+  el.textContent = texto;
+  el.classList.add('visible');
+}
+function ocultarMensajes() {
+  document.getElementById('mensaje-error').classList.remove('visible');
+  document.getElementById('mensaje-exito').classList.remove('visible');
+}
+
+inicializar();
+</script>
+</body>
+</html>

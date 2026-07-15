@@ -266,7 +266,7 @@ async function guardarPredeterminado() {
 async function cargarAprendices(fichaId) {
   const { data: aprendices, error } = await supabaseClient
     .from('aprendices')
-    .select('id, nombre_completo, numero_documento')
+    .select('id, nombre_completo, numero_documento, foto_url')
     .eq('ficha_id', fichaId)
     .order('nombre_completo');
 
@@ -423,9 +423,15 @@ function renderizarLista() {
 
   cont.innerHTML = aprendicesActuales.map(a => `
     <div class="fila-aprendiz" style="flex-wrap:wrap;">
-      <div>
-        <div class="nombre">${a.nombre_completo}</div>
-        <div class="doc">${a.numero_documento}</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        ${a.foto_url
+            ? `<img src="${a.foto_url}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+            : `<div style="width:36px;height:36px;border-radius:50%;background:var(--gris-fondo);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--gris-texto);flex-shrink:0;">${a.nombre_completo.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase()}</div>`
+          }
+        <div>
+          <div class="nombre">${a.nombre_completo}</div>
+          <div class="doc">${a.numero_documento}</div>
+        </div>
       </div>
       <div class="opciones-estado" data-aprendiz="${a.id}">
         <button type="button" class="sel-presente" onclick="marcarEstado('${a.id}','Presente')">Presente</button>
