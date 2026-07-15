@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exámenes - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .actividad-tarjeta {
+    border: 1px solid var(--gris-borde);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .actividad-titulo { font-weight: 600; }
+  .actividad-fechas { font-size: 0.85rem; color: var(--gris-texto); margin-top: 4px; }
+  .actividad-desc { font-size: 0.85rem; color: var(--gris-texto); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Fichas</a>
+    <a href="asistencia.html">Asistencia</a>
+    <a href="material.html">Material</a>
+    <a href="examenes.html" class="activo">Exámenes</a>
+    <a href="foro.html">Foro</a>
+    <a href="calificaciones.html">Calificaciones</a>
+    <a href="reportes.html">Reportes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:720px;">
+  <h2 style="margin-bottom:20px;">Calendario de exámenes y actividades</h2>
+
+  <div class="tarjeta" style="margin-bottom:20px;">
+    <div class="campo" style="margin-bottom:0;">
+      <label for="select-ficha">Ficha</label>
+      <select id="select-ficha" onchange="alCambiarFicha()"></select>
+    </div>
+  </div>
+
+  <div class="tarjeta espaciado-v" style="margin-bottom:24px;">
+    <h3 style="margin-bottom:4px; font-size:0.95rem;">Programar nuevo examen/actividad</h3>
+    <input type="text" id="titulo-actividad" placeholder="Título (ej: Examen Torneado CNC - Corte 1)">
+    <textarea id="descripcion-actividad" rows="2" placeholder="Instrucciones o descripción (opcional)"></textarea>
+    <div class="grid-2">
+      <div class="campo" style="margin-bottom:0;">
+        <label for="fecha-inicio-actividad">Disponible desde</label>
+        <input type="date" id="fecha-inicio-actividad">
+      </div>
+      <div class="campo" style="margin-bottom:0;">
+        <label for="fecha-fin-actividad">Disponible hasta</label>
+        <input type="date" id="fecha-fin-actividad">
+      </div>
+    </div>
+    <div class="campo" style="margin-bottom:0;">
+      <label for="tiempo-limite-actividad">Tiempo límite en minutos (opcional, solo si aplica)</label>
+      <input type="number" id="tiempo-limite-actividad" min="1" placeholder="Ej: 60">
+    </div>
+    <button class="btn btn-primario" style="width:100%;" onclick="crearActividad()">+ Programar</button>
+    <p class="mensaje-error" id="mensaje-error"></p>
+    <p class="mensaje-error" id="mensaje-exito" style="background:rgba(57,169,0,0.1); color:var(--verde-oscuro);"></p>
+  </div>
+
+  <h3 style="margin-bottom:12px;">Actividades programadas</h3>
+  <div id="lista-actividades"><p class="texto-ayuda">Selecciona una ficha.</p></div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+requerirSesionInstructor();
+
+async function cargarFichas() {
+  const { data: fichas, error } = await supabaseClient
+    .from('fichas')
+    .select('id, numero_ficha, programa, nombre_grupo')
+    .order('created_at', { ascending: false });
+
+  const select = document.getElementById('select-ficha');
+  if (error || !fichas || fichas.length === 0) {
+    select.innerHTML = '<option value="">No hay fichas creadas</option>';
+    return;
+  }
+  select.innerHTML = fichas.map(f => `<option value="${f.id}">${f.nombre_grupo ? f.nombre_grupo + ' — ' : ''}Ficha ${f.numero_ficha} · ${f.programa}</option>`).join('');
+
+  const ultimaFichaUsada = localStorage.getItem('aulasena_ultima_ficha');
+  if (ultimaFichaUsada && fichas.some(f => f.id === ultimaFichaUsada)) {
+    select.value = ultimaFichaUsada;
+  }
+  alCambiarFicha();
+}
+
+function alCambiarFicha() {
+  const fichaId = document.getElementById('select-ficha').value;
+  if (!fichaId) return;
+  localStorage.setItem('aulasena_ultima_ficha', fichaId);
+  cargarActividades(fichaId);
+}
+
+async function crearActividad() {
+  ocultarMensajes();
+  const fichaId = document.getElementById('select-ficha').value;
+  const titulo = document.getElementById('titulo-actividad').value.trim();
+  const descripcion = document.getElementById('descripcion-actividad').value.trim();
+  const fechaInicio = document.getElementById('fecha-inicio-actividad').value;
+  const fechaFin = document.getElementById('fecha-fin-actividad').value;
+  const tiempoLimite = document.getElementById('tiempo-limite-actividad').value;
+
+  if (!fichaId) { mostrarError('Selecciona una ficha.'); return; }
+  if (!titulo) { mostrarError('El título es obligatorio.'); return; }
+  if (!fechaInicio || !fechaFin) { mostrarError('Debes indicar la fecha de inicio y de fin.'); return; }
+  if (fechaFin < fechaInicio) { mostrarError('La fecha de fin no puede ser antes que la de inicio.'); return; }
+
+  const { error } = await supabaseClient.from('examenes').insert({
+    ficha_id: fichaId,
+    titulo,
+    descripcion: descripcion || null,
+    fecha_inicio: fechaInicio,
+    fecha_fin: fechaFin,
+    tiempo_limite_minutos: tiempoLimite ? parseInt(tiempoLimite) : null,
+  });
+
+  if (error) { mostrarError('Error al programar: ' + error.message); return; }
+
+  document.getElementById('titulo-actividad').value = '';
+  document.getElementById('descripcion-actividad').value = '';
+  document.getElementById('fecha-inicio-actividad').value = '';
+  document.getElementById('fecha-fin-actividad').value = '';
+  document.getElementById('tiempo-limite-actividad').value = '';
+  mostrarExito('Actividad programada correctamente.');
+  cargarActividades(fichaId);
+}
+
+async function cargarActividades(fichaId) {
+  const cont = document.getElementById('lista-actividades');
+  const { data: actividades, error } = await supabaseClient
+    .from('examenes')
+    .select('*')
+    .eq('ficha_id', fichaId)
+    .order('fecha_inicio', { ascending: true });
+
+  if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
+  if (!actividades || actividades.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Aún no has programado ninguna actividad para esta ficha.</p>'; return; }
+
+  const hoy = new Date().toISOString().split('T')[0];
+
+  cont.innerHTML = actividades.map(a => {
+    let estadoTexto = 'Próximamente';
+    let estadoClase = 'etiqueta-gris';
+    if (a.fecha_fin && hoy > a.fecha_fin) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
+    else if (a.fecha_inicio && hoy >= a.fecha_inicio) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; }
+
+    return `
+      <div class="actividad-tarjeta">
+        <div>
+          <div class="actividad-titulo">${a.titulo} <span class="etiqueta ${estadoClase}">${estadoTexto}</span></div>
+          <div class="actividad-fechas">Del ${formatearFecha(a.fecha_inicio)} al ${formatearFecha(a.fecha_fin)}${a.tiempo_limite_minutos ? ` · ${a.tiempo_limite_minutos} min` : ''}</div>
+          ${a.descripcion ? `<div class="actividad-desc">${a.descripcion}</div>` : ''}
+        </div>
+        <button onclick="eliminarActividad('${a.id}')" style="border:none; background:none; color:var(--rojo-error); cursor:pointer; font-size:0.78rem; flex-shrink:0;">Eliminar</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function formatearFecha(fecha) {
+  if (!fecha) return '—';
+  return new Date(fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+async function eliminarActividad(id) {
+  if (!confirm('¿Eliminar esta actividad programada?')) return;
+  const { error } = await supabaseClient.from('examenes').delete().eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  cargarActividades(document.getElementById('select-ficha').value);
+}
+
+function mostrarError(texto) {
+  const el = document.getElementById('mensaje-error');
+  el.textContent = texto;
+  el.classList.add('visible');
+}
+function mostrarExito(texto) {
+  const el = document.getElementById('mensaje-exito');
+  el.textContent = texto;
+  el.classList.add('visible');
+}
+function ocultarMensajes() {
+  document.getElementById('mensaje-error').classList.remove('visible');
+  document.getElementById('mensaje-exito').classList.remove('visible');
+}
+
+cargarFichas();
+</script>
+</body>
+</html>

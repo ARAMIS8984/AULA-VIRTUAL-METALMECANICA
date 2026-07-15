@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exámenes - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .actividad-tarjeta {
+    border: 1px solid var(--gris-borde);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .actividad-tarjeta.disponible { border-color: var(--verde-sena); background: rgba(57,169,0,0.04); }
+  .actividad-titulo { font-weight: 600; }
+  .actividad-fechas { font-size: 0.85rem; color: var(--gris-texto); margin-top: 4px; }
+  .actividad-desc { font-size: 0.85rem; color: var(--gris-texto); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Inicio</a>
+    <a href="material.html">Material</a>
+    <a href="foro.html">Foro</a>
+    <a href="calificaciones.html">Mis calificaciones</a>
+    <a href="examenes.html" class="activo">Exámenes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionAprendiz()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:720px;">
+  <h2 style="margin-bottom:4px;">Calendario de exámenes y actividades</h2>
+  <p id="info-ficha" style="color:var(--gris-texto); margin-bottom:24px;"></p>
+
+  <div id="lista-actividades"><p class="texto-ayuda">Cargando...</p></div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+const sesion = requerirSesionAprendiz();
+
+async function inicializar() {
+  if (!sesion) return;
+  document.getElementById('info-ficha').textContent = `Ficha ${sesion.numero_ficha} · ${sesion.programa}`;
+  await cargarActividades();
+}
+
+async function cargarActividades() {
+  const cont = document.getElementById('lista-actividades');
+  const { data: actividades, error } = await supabaseClient
+    .from('examenes')
+    .select('*')
+    .eq('ficha_id', sesion.ficha_id)
+    .order('fecha_inicio', { ascending: true });
+
+  if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
+  if (!actividades || actividades.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Tu instructor aún no ha programado exámenes ni actividades.</p>'; return; }
+
+  const hoy = new Date().toISOString().split('T')[0];
+
+  cont.innerHTML = actividades.map(a => {
+    let estadoTexto = 'Próximamente';
+    let estadoClase = 'etiqueta-gris';
+    let disponible = false;
+    if (a.fecha_fin && hoy > a.fecha_fin) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
+    else if (a.fecha_inicio && hoy >= a.fecha_inicio) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; disponible = true; }
+
+    return `
+      <div class="actividad-tarjeta ${disponible ? 'disponible' : ''}">
+        <div class="actividad-titulo">${a.titulo} <span class="etiqueta ${estadoClase}">${estadoTexto}</span></div>
+        <div class="actividad-fechas">Del ${formatearFecha(a.fecha_inicio)} al ${formatearFecha(a.fecha_fin)}${a.tiempo_limite_minutos ? ` · ${a.tiempo_limite_minutos} min` : ''}</div>
+        ${a.descripcion ? `<div class="actividad-desc">${a.descripcion}</div>` : ''}
+        ${disponible ? `<button class="btn btn-primario" style="margin-top:10px;" onclick="alert('El banco de preguntas para presentar el examen aún no está construido. Muy pronto podrás presentarlo aquí mismo.')">Presentar ahora</button>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function formatearFecha(fecha) {
+  if (!fecha) return '—';
+  return new Date(fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+inicializar();
+</script>
+</body>
+</html>
