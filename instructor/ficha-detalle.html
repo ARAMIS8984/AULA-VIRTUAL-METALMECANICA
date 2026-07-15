@@ -109,7 +109,7 @@ async function cargarDetalleFicha() {
 
   const { data: aprendices, error: errorAprendices } = await supabaseClient
     .from('aprendices')
-    .select('nombre_completo, numero_documento, estado, foto_url')
+    .select('id, nombre_completo, numero_documento, estado, foto_url')
     .eq('ficha_id', fichaId)
     .order('nombre_completo');
 
