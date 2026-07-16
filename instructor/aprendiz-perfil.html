@@ -76,6 +76,11 @@
   </div>
 
   <div class="seccion">
+    <h3>Datos personales y de contacto</h3>
+    <div id="datos-personales" class="tarjeta"><p class="texto-ayuda">Cargando...</p></div>
+  </div>
+
+  <div class="seccion">
     <h3>Historial de asistencia</h3>
     <div id="lista-asistencia" class="tabla-scroll"><p class="texto-ayuda">Cargando...</p></div>
   </div>
@@ -121,6 +126,8 @@ async function inicializar() {
   document.getElementById('meta-aprendiz').textContent =
     `Documento ${aprendiz.numero_documento} · Ficha ${aprendiz.fichas.numero_ficha}${aprendiz.fichas.nombre_grupo ? ' (' + aprendiz.fichas.nombre_grupo + ')' : ''} · ${aprendiz.fichas.programa}`;
 
+  renderizarDatosPersonales(aprendiz);
+
   if (aprendiz.foto_url) {
     document.getElementById('foto-perfil').src = aprendiz.foto_url;
     document.getElementById('foto-perfil').classList.remove('oculto');
@@ -139,6 +146,33 @@ function colorNota(nota) {
   if (nota >= 80) return 'var(--verde-sena)';
   if (nota >= 60) return 'var(--amarillo-alerta)';
   return 'var(--rojo-error)';
+}
+
+function renderizarDatosPersonales(a) {
+  const cont = document.getElementById('datos-personales');
+  const filas = [
+    ['Correo', a.correo],
+    ['Teléfono', a.telefono],
+    ['Tipo de sangre', a.tipo_sangre],
+    ['Dirección', a.direccion],
+    ['Contacto de emergencia', a.contacto_emergencia_nombre],
+    ['Teléfono de emergencia', a.contacto_emergencia_telefono],
+  ];
+  const hayDatos = filas.some(f => f[1]);
+  if (!hayDatos) {
+    cont.innerHTML = '<p class="texto-ayuda" style="margin:0;">El aprendiz aún no ha completado sus datos personales.</p>';
+    return;
+  }
+  cont.innerHTML = `
+    <div class="grid-2">
+      ${filas.map(([etiqueta, valor]) => `
+        <div>
+          <p class="texto-ayuda" style="margin-bottom:2px;">${etiqueta}</p>
+          <p style="margin:0; font-weight:500;">${valor || '—'}</p>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 async function cargarAsistencia(aprendiz) {
@@ -282,6 +316,14 @@ function descargarReporte() {
   doc.text(`Documento: ${a.numero_documento}`, 14, y); y += 6;
   doc.text(`Ficha: ${a.fichas.numero_ficha} - ${a.fichas.programa}`, 14, y); y += 6;
   doc.text(`Nota final: ${datosReporte.notaFinal !== null ? Math.round(datosReporte.notaFinal) : 'Sin datos suficientes'}`, 14, y); y += 10;
+
+  doc.setFontSize(13);
+  doc.text('Datos personales', 14, y); y += 7;
+  doc.setFontSize(10);
+  doc.text(`Correo: ${a.correo || 'No registrado'}`, 14, y); y += 6;
+  doc.text(`Telefono: ${a.telefono || 'No registrado'}`, 14, y); y += 6;
+  doc.text(`Tipo de sangre: ${a.tipo_sangre || 'No registrado'}`, 14, y); y += 6;
+  doc.text(`Contacto de emergencia: ${a.contacto_emergencia_nombre || 'No registrado'} - ${a.contacto_emergencia_telefono || ''}`, 14, y); y += 10;
 
   doc.setFontSize(13);
   doc.text('Resumen', 14, y); y += 7;

@@ -94,7 +94,7 @@ async function iniciarSesionAprendiz(evento) {
     programa: ficha.programa,
   }));
 
-  window.location.href = 'aprendiz/dashboard.html';
+  window.location.href = 'aprendiz/perfil.html';
   return false;
 }
 

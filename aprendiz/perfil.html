@@ -53,6 +53,46 @@
     <div class="mensaje-error" id="mensaje-error"></div>
     <div class="mensaje-error" id="mensaje-exito" style="background:rgba(57,169,0,0.1); color:var(--verde-oscuro);"></div>
   </div>
+
+  <div class="tarjeta espaciado-v" style="margin-top:20px; text-align:left;">
+    <h3 style="margin-bottom:4px; font-size:0.95rem;">Datos personales</h3>
+    <p class="texto-ayuda" style="margin-top:-4px;">Esta información nos ayuda a contactarte o actuar rápido en caso de emergencia.</p>
+
+    <div class="campo">
+      <label for="correo">Correo electrónico</label>
+      <input type="text" id="correo" placeholder="tucorreo@ejemplo.com">
+    </div>
+    <div class="campo">
+      <label for="telefono">Número de contacto</label>
+      <input type="text" id="telefono" placeholder="Ej: 3001234567">
+    </div>
+    <div class="campo">
+      <label for="tipo-sangre">Tipo de sangre</label>
+      <select id="tipo-sangre">
+        <option value="">Selecciona...</option>
+        <option value="O+">O+</option><option value="O-">O-</option>
+        <option value="A+">A+</option><option value="A-">A-</option>
+        <option value="B+">B+</option><option value="B-">B-</option>
+        <option value="AB+">AB+</option><option value="AB-">AB-</option>
+      </select>
+    </div>
+    <div class="campo">
+      <label for="direccion">Dirección de residencia</label>
+      <input type="text" id="direccion" placeholder="Barrio, dirección">
+    </div>
+    <div class="campo">
+      <label for="contacto-emergencia-nombre">Persona a cargo / contacto de emergencia</label>
+      <input type="text" id="contacto-emergencia-nombre" placeholder="Nombre completo">
+    </div>
+    <div class="campo" style="margin-bottom:0;">
+      <label for="contacto-emergencia-telefono">Teléfono de emergencia</label>
+      <input type="text" id="contacto-emergencia-telefono" placeholder="Ej: 3001234567">
+    </div>
+
+    <button class="btn btn-primario" style="width:100%;" onclick="guardarDatosPersonales()">Guardar datos personales</button>
+    <p class="mensaje-error" id="mensaje-datos-error"></p>
+    <p class="mensaje-error" id="mensaje-datos-exito" style="background:rgba(57,169,0,0.1); color:var(--verde-oscuro);"></p>
+  </div>
 </div>
 
 <script src="../js/supabase-config.js"></script>
@@ -66,13 +106,46 @@ async function inicializar() {
 
   const { data: aprendiz, error } = await supabaseClient
     .from('aprendices')
-    .select('foto_url')
+    .select('foto_url, correo, telefono, tipo_sangre, direccion, contacto_emergencia_nombre, contacto_emergencia_telefono')
     .eq('id', sesion.id)
     .single();
 
-  if (!error && aprendiz && aprendiz.foto_url) {
-    mostrarFoto(aprendiz.foto_url);
+  if (!error && aprendiz) {
+    if (aprendiz.foto_url) mostrarFoto(aprendiz.foto_url);
+    document.getElementById('correo').value = aprendiz.correo || '';
+    document.getElementById('telefono').value = aprendiz.telefono || '';
+    document.getElementById('tipo-sangre').value = aprendiz.tipo_sangre || '';
+    document.getElementById('direccion').value = aprendiz.direccion || '';
+    document.getElementById('contacto-emergencia-nombre').value = aprendiz.contacto_emergencia_nombre || '';
+    document.getElementById('contacto-emergencia-telefono').value = aprendiz.contacto_emergencia_telefono || '';
   }
+}
+
+async function guardarDatosPersonales() {
+  const mensajeError = document.getElementById('mensaje-datos-error');
+  const mensajeExito = document.getElementById('mensaje-datos-exito');
+  mensajeError.classList.remove('visible');
+  mensajeExito.classList.remove('visible');
+
+  const { error } = await supabaseClient
+    .from('aprendices')
+    .update({
+      correo: document.getElementById('correo').value.trim() || null,
+      telefono: document.getElementById('telefono').value.trim() || null,
+      tipo_sangre: document.getElementById('tipo-sangre').value || null,
+      direccion: document.getElementById('direccion').value.trim() || null,
+      contacto_emergencia_nombre: document.getElementById('contacto-emergencia-nombre').value.trim() || null,
+      contacto_emergencia_telefono: document.getElementById('contacto-emergencia-telefono').value.trim() || null,
+    })
+    .eq('id', sesion.id);
+
+  if (error) {
+    mensajeError.textContent = 'Error al guardar: ' + error.message;
+    mensajeError.classList.add('visible');
+    return;
+  }
+  mensajeExito.textContent = 'Datos personales guardados ✓';
+  mensajeExito.classList.add('visible');
 }
 
 function mostrarFoto(url) {
