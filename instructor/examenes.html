@@ -49,7 +49,8 @@
   </div>
 
   <div class="tarjeta espaciado-v" style="margin-bottom:24px;">
-    <h3 style="margin-bottom:4px; font-size:0.95rem;">Programar nuevo examen/actividad</h3>
+    <h3 style="margin-bottom:4px; font-size:0.95rem;" id="titulo-formulario">Programar nuevo examen/actividad</h3>
+    <input type="hidden" id="id-actividad-editando" value="">
     <input type="text" id="titulo-actividad" placeholder="Título (ej: Examen Torneado CNC - Corte 1)">
     <textarea id="descripcion-actividad" rows="2" placeholder="Instrucciones o descripción (opcional)"></textarea>
     <div class="grid-2">
@@ -66,7 +67,8 @@
       <label for="tiempo-limite-actividad">Tiempo límite en minutos (opcional, solo si aplica)</label>
       <input type="number" id="tiempo-limite-actividad" min="1" placeholder="Ej: 60">
     </div>
-    <button class="btn btn-primario" style="width:100%;" onclick="crearActividad()">+ Programar</button>
+    <button class="btn btn-primario" style="width:100%;" id="btn-guardar-actividad" onclick="guardarActividad()">+ Programar</button>
+    <button class="btn btn-secundario oculto" style="width:100%;" id="btn-cancelar-edicion" onclick="cancelarEdicion()">Cancelar edición</button>
     <p class="mensaje-error" id="mensaje-error"></p>
     <p class="mensaje-error" id="mensaje-exito" style="background:rgba(57,169,0,0.1); color:var(--verde-oscuro);"></p>
   </div>
@@ -79,6 +81,8 @@
 <script src="../js/auth.js"></script>
 <script>
 requerirSesionInstructor();
+
+let actividadesCache = {};
 
 async function cargarFichas() {
   const { data: fichas, error } = await supabaseClient
@@ -107,9 +111,10 @@ function alCambiarFicha() {
   cargarActividades(fichaId);
 }
 
-async function crearActividad() {
+async function guardarActividad() {
   ocultarMensajes();
   const fichaId = document.getElementById('select-ficha').value;
+  const idEditando = document.getElementById('id-actividad-editando').value;
   const titulo = document.getElementById('titulo-actividad').value.trim();
   const descripcion = document.getElementById('descripcion-actividad').value.trim();
   const fechaInicio = document.getElementById('fecha-inicio-actividad').value;
@@ -121,24 +126,51 @@ async function crearActividad() {
   if (!fechaInicio || !fechaFin) { mostrarError('Debes indicar la fecha de inicio y de fin.'); return; }
   if (fechaFin < fechaInicio) { mostrarError('La fecha de fin no puede ser antes que la de inicio.'); return; }
 
-  const { error } = await supabaseClient.from('examenes').insert({
+  const datos = {
     ficha_id: fichaId,
     titulo,
     descripcion: descripcion || null,
     fecha_inicio: fechaInicio,
     fecha_fin: fechaFin,
     tiempo_limite_minutos: tiempoLimite ? parseInt(tiempoLimite) : null,
-  });
+  };
 
-  if (error) { mostrarError('Error al programar: ' + error.message); return; }
+  const { error } = idEditando
+    ? await supabaseClient.from('examenes').update(datos).eq('id', idEditando)
+    : await supabaseClient.from('examenes').insert(datos);
 
+  if (error) { mostrarError('Error al guardar: ' + error.message); return; }
+
+  mostrarExito(idEditando ? 'Actividad actualizada correctamente.' : 'Actividad programada correctamente.');
+  cancelarEdicion();
+  cargarActividades(fichaId);
+}
+
+function editarActividad(a) {
+  document.getElementById('id-actividad-editando').value = a.id;
+  document.getElementById('titulo-actividad').value = a.titulo;
+  document.getElementById('descripcion-actividad').value = a.descripcion || '';
+  document.getElementById('fecha-inicio-actividad').value = a.fecha_inicio || '';
+  document.getElementById('fecha-fin-actividad').value = a.fecha_fin || '';
+  document.getElementById('tiempo-limite-actividad').value = a.tiempo_limite_minutos || '';
+
+  document.getElementById('titulo-formulario').textContent = 'Editando actividad';
+  document.getElementById('btn-guardar-actividad').textContent = 'Guardar cambios';
+  document.getElementById('btn-cancelar-edicion').classList.remove('oculto');
+  document.getElementById('titulo-actividad').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelarEdicion() {
+  document.getElementById('id-actividad-editando').value = '';
   document.getElementById('titulo-actividad').value = '';
   document.getElementById('descripcion-actividad').value = '';
   document.getElementById('fecha-inicio-actividad').value = '';
   document.getElementById('fecha-fin-actividad').value = '';
   document.getElementById('tiempo-limite-actividad').value = '';
-  mostrarExito('Actividad programada correctamente.');
-  cargarActividades(fichaId);
+
+  document.getElementById('titulo-formulario').textContent = 'Programar nuevo examen/actividad';
+  document.getElementById('btn-guardar-actividad').textContent = '+ Programar';
+  document.getElementById('btn-cancelar-edicion').classList.add('oculto');
 }
 
 async function cargarActividades(fichaId) {
@@ -153,8 +185,10 @@ async function cargarActividades(fichaId) {
   if (!actividades || actividades.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Aún no has programado ninguna actividad para esta ficha.</p>'; return; }
 
   const hoy = new Date().toISOString().split('T')[0];
+  actividadesCache = {};
 
   cont.innerHTML = actividades.map(a => {
+    actividadesCache[a.id] = a;
     let estadoTexto = 'Próximamente';
     let estadoClase = 'etiqueta-gris';
     if (a.fecha_fin && hoy > a.fecha_fin) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
@@ -166,7 +200,10 @@ async function cargarActividades(fichaId) {
           <div class="actividad-titulo">${a.titulo} <span class="etiqueta ${estadoClase}">${estadoTexto}</span></div>
           <div class="actividad-fechas">Del ${formatearFecha(a.fecha_inicio)} al ${formatearFecha(a.fecha_fin)}${a.tiempo_limite_minutos ? ` · ${a.tiempo_limite_minutos} min` : ''}</div>
           ${a.descripcion ? `<div class="actividad-desc">${a.descripcion}</div>` : ''}
-          <button class="btn btn-secundario" style="font-size:0.75rem; padding:5px 10px; margin-top:8px;" onclick="verResultados('${a.id}')">Ver resultados</button>
+          <div style="display:flex; gap:10px; margin-top:8px;">
+            <button class="btn btn-secundario" style="font-size:0.75rem; padding:5px 10px;" onclick="editarActividad(actividadesCache['${a.id}'])">Editar</button>
+            <button class="btn btn-secundario" style="font-size:0.75rem; padding:5px 10px;" onclick="verResultados('${a.id}')">Ver resultados</button>
+          </div>
         </div>
         <button onclick="eliminarActividad('${a.id}')" style="border:none; background:none; color:var(--rojo-error); cursor:pointer; font-size:0.78rem; flex-shrink:0;">Eliminar</button>
       </div>
