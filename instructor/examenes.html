@@ -166,11 +166,60 @@ async function cargarActividades(fichaId) {
           <div class="actividad-titulo">${a.titulo} <span class="etiqueta ${estadoClase}">${estadoTexto}</span></div>
           <div class="actividad-fechas">Del ${formatearFecha(a.fecha_inicio)} al ${formatearFecha(a.fecha_fin)}${a.tiempo_limite_minutos ? ` · ${a.tiempo_limite_minutos} min` : ''}</div>
           ${a.descripcion ? `<div class="actividad-desc">${a.descripcion}</div>` : ''}
+          <button class="btn btn-secundario" style="font-size:0.75rem; padding:5px 10px; margin-top:8px;" onclick="verResultados('${a.id}')">Ver resultados</button>
         </div>
         <button onclick="eliminarActividad('${a.id}')" style="border:none; background:none; color:var(--rojo-error); cursor:pointer; font-size:0.78rem; flex-shrink:0;">Eliminar</button>
       </div>
+      <div id="resultados-${a.id}" class="oculto" style="margin:-4px 0 14px; padding-left:4px;"></div>
     `;
   }).join('');
+}
+
+async function verResultados(examenId) {
+  const cont = document.getElementById(`resultados-${examenId}`);
+  const visible = !cont.classList.contains('oculto');
+  document.querySelectorAll('[id^="resultados-"]').forEach(el => el.classList.add('oculto'));
+  if (visible) return;
+  cont.classList.remove('oculto');
+  cont.innerHTML = '<p class="texto-ayuda">Cargando resultados...</p>';
+
+  const { data: resultados, error } = await supabaseClient
+    .from('resultados_examen')
+    .select('*, aprendices(nombre_completo)')
+    .eq('examen_id', examenId)
+    .order('fecha_presentacion', { ascending: false });
+
+  if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
+  if (!resultados || resultados.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Nadie ha presentado este examen todavía.</p>'; return; }
+
+  cont.innerHTML = resultados.map(r => `
+    <div class="tarjeta espaciado-v" style="margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong>${r.aprendices?.nombre_completo || 'Aprendiz'}</strong>
+        <span class="etiqueta ${r.revisado ? 'etiqueta-verde' : 'etiqueta-gris'}">${r.revisado ? `Nota: ${r.puntaje_obtenido}` : 'Pendiente de revisión'}</span>
+      </div>
+      ${(r.respuestas || []).map(resp => `
+        <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
+          <p style="margin:0 0 2px; color:var(--gris-texto);">${resp.enunciado}</p>
+          <p style="margin:0;">${resp.respuesta || '<em>Sin responder</em>'} ${resp.tipo === 'opcion_multiple' ? (resp.correcta ? '✅' : '❌') : ''}</p>
+        </div>
+      `).join('')}
+      ${!r.revisado ? `
+        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+          <input type="number" id="nota-manual-${r.id}" min="0" max="100" placeholder="Nota 0-100" style="width:110px;">
+          <button class="btn btn-primario" style="font-size:0.8rem; padding:6px 12px;" onclick="guardarNotaManual('${r.id}', '${examenId}')">Guardar nota final</button>
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+async function guardarNotaManual(resultadoId, examenId) {
+  const nota = document.getElementById(`nota-manual-${resultadoId}`).value;
+  if (nota === '') { alert('Escribe una nota.'); return; }
+  const { error } = await supabaseClient.from('resultados_examen').update({ puntaje_obtenido: parseFloat(nota), revisado: true }).eq('id', resultadoId);
+  if (error) { alert('Error: ' + error.message); return; }
+  verResultados(examenId);
 }
 
 function formatearFecha(fecha) {

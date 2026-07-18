@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Presentar examen - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .cronometro {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--azul-sena); color: var(--blanco);
+    padding: 12px 16px; border-radius: 10px; text-align: center;
+    font-size: 1.3rem; font-weight: 700; margin-bottom: 20px;
+  }
+  .cronometro.alerta { background: var(--rojo-error); }
+  .pregunta-tarjeta { border: 1px solid var(--gris-borde); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .pregunta-numero { font-size: 0.78rem; color: var(--gris-texto); margin-bottom: 4px; }
+  .pregunta-enunciado { font-weight: 600; margin-bottom: 12px; }
+  .opcion-radio { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; cursor: pointer; }
+  .opcion-radio input { margin-top: 3px; }
+</style>
+</head>
+<body>
+
+<div class="contenedor" style="padding-top:24px; padding-bottom:48px; max-width:640px;">
+  <div id="cronometro-cont"></div>
+  <div id="contenido">
+    <p class="texto-ayuda">Cargando examen...</p>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+const sesion = requerirSesionAprendiz();
+const parametros = new URLSearchParams(window.location.search);
+const examenId = parametros.get('id');
+
+let preguntas = [];
+let respuestasElegidas = {};
+let segundosRestantes = null;
+let intervaloCronometro = null;
+let examenTerminado = false;
+
+async function inicializar() {
+  if (!sesion || !examenId) { window.location.href = 'examenes.html'; return; }
+
+  const { data: examen, error: errorExamen } = await supabaseClient
+    .from('examenes')
+    .select('*')
+    .eq('id', examenId)
+    .single();
+
+  if (errorExamen || !examen) {
+    document.getElementById('contenido').innerHTML = '<p style="color:var(--rojo-error);">No se encontró este examen.</p>';
+    return;
+  }
+
+  const hoy = new Date().toISOString().split('T')[0];
+  if (examen.fecha_inicio && hoy < examen.fecha_inicio) {
+    document.getElementById('contenido').innerHTML = '<p class="texto-ayuda">Este examen todavía no está disponible.</p>';
+    return;
+  }
+  if (examen.fecha_fin && hoy > examen.fecha_fin) {
+    document.getElementById('contenido').innerHTML = '<p class="texto-ayuda">El plazo para presentar este examen ya cerró.</p>';
+    return;
+  }
+
+  const { data: yaPresentado } = await supabaseClient
+    .from('resultados_examen')
+    .select('id, puntaje_obtenido, revisado')
+    .eq('examen_id', examenId)
+    .eq('aprendiz_id', sesion.id)
+    .maybeSingle();
+
+  if (yaPresentado) {
+    document.getElementById('contenido').innerHTML = `
+      <div class="tarjeta" style="text-align:center;">
+        <h3>Ya presentaste este examen</h3>
+        <p class="texto-ayuda">${yaPresentado.revisado || yaPresentado.puntaje_obtenido !== null
+            ? `Tu nota: <strong>${yaPresentado.puntaje_obtenido}</strong>`
+            : 'Tu instructor aún está revisando algunas de tus respuestas.'}</p>
+        <a href="examenes.html" class="btn btn-secundario" style="margin-top:10px; display:inline-block;">Volver</a>
+      </div>
+    `;
+    return;
+  }
+
+  const { data: datosPreguntas, error: errorPreguntas } = await supabaseClient
+    .from('preguntas')
+    .select('*')
+    .eq('examen_id', examenId)
+    .order('orden', { ascending: true });
+
+  if (errorPreguntas || !datosPreguntas || datosPreguntas.length === 0) {
+    document.getElementById('contenido').innerHTML = '<p class="texto-ayuda">Tu instructor aún no ha cargado las preguntas de este examen.</p>';
+    return;
+  }
+
+  preguntas = datosPreguntas;
+
+  if (examen.tiempo_limite_minutos) {
+    segundosRestantes = examen.tiempo_limite_minutos * 60;
+    iniciarCronometro();
+  }
+
+  document.getElementById('contenido').innerHTML = `
+    <h2 style="margin-bottom:2px;">${examen.titulo}</h2>
+    ${examen.descripcion ? `<p class="texto-ayuda" style="margin-bottom:20px;">${examen.descripcion}</p>` : ''}
+    <div id="lista-preguntas">
+      ${preguntas.map((p, i) => renderizarPregunta(p, i)).join('')}
+    </div>
+    <button class="btn btn-primario" style="width:100%;" onclick="confirmarEnvio()">Enviar examen</button>
+  `;
+}
+
+function renderizarPregunta(p, i) {
+  if (p.tipo === 'abierta') {
+    return `
+      <div class="pregunta-tarjeta">
+        <div class="pregunta-numero">Pregunta ${i + 1} de ${preguntas.length}</div>
+        <div class="pregunta-enunciado">${p.enunciado}</div>
+        <textarea rows="4" placeholder="Escribe tu respuesta..." onchange="respuestasElegidas['${p.id}'] = this.value"></textarea>
+      </div>
+    `;
+  }
+  const opciones = p.opciones || [];
+  return `
+    <div class="pregunta-tarjeta">
+      <div class="pregunta-numero">Pregunta ${i + 1} de ${preguntas.length}</div>
+      <div class="pregunta-enunciado">${p.enunciado}</div>
+      ${opciones.map((op, j) => `
+        <label class="opcion-radio">
+          <input type="radio" name="pregunta-${p.id}" value="${op.replace(/"/g,'&quot;')}" onchange="respuestasElegidas['${p.id}'] = this.value">
+          <span>${op}</span>
+        </label>
+      `).join('')}
+    </div>
+  `;
+}
+
+function iniciarCronometro() {
+  const cont = document.getElementById('cronometro-cont');
+  intervaloCronometro = setInterval(() => {
+    segundosRestantes--;
+    const min = Math.floor(segundosRestantes / 60);
+    const seg = segundosRestantes % 60;
+    const alerta = segundosRestantes <= 60;
+    cont.innerHTML = `<div class="cronometro ${alerta ? 'alerta' : ''}">⏱ ${min}:${seg.toString().padStart(2,'0')}</div>`;
+
+    if (segundosRestantes <= 0) {
+      clearInterval(intervaloCronometro);
+      enviarExamen(true);
+    }
+  }, 1000);
+}
+
+function confirmarEnvio() {
+  const sinResponder = preguntas.filter(p => !respuestasElegidas[p.id]).length;
+  const mensaje = sinResponder > 0
+    ? `Tienes ${sinResponder} pregunta(s) sin responder. ¿Enviar de todas formas?`
+    : '¿Confirmas enviar el examen? No podrás modificarlo después.';
+  if (confirm(mensaje)) enviarExamen(false);
+}
+
+async function enviarExamen(porTiempo) {
+  if (examenTerminado) return;
+  examenTerminado = true;
+  if (intervaloCronometro) clearInterval(intervaloCronometro);
+
+  let puntajeTotal = 0;
+  let puntajePosibleAutomatico = 0;
+  let hayPreguntasAbiertas = false;
+
+  const respuestasGuardadas = preguntas.map(p => {
+    const respuestaAprendiz = respuestasElegidas[p.id] || null;
+    if (p.tipo === 'abierta') {
+      hayPreguntasAbiertas = true;
+      return { pregunta_id: p.id, enunciado: p.enunciado, respuesta: respuestaAprendiz, tipo: 'abierta' };
+    }
+    const esCorrecta = respuestaAprendiz === p.respuesta_correcta;
+    puntajePosibleAutomatico += parseFloat(p.puntaje || 1);
+    if (esCorrecta) puntajeTotal += parseFloat(p.puntaje || 1);
+    return { pregunta_id: p.id, enunciado: p.enunciado, respuesta: respuestaAprendiz, correcta: esCorrecta, tipo: 'opcion_multiple' };
+  });
+
+  const notaFinal100 = puntajePosibleAutomatico > 0 ? Math.round((puntajeTotal / puntajePosibleAutomatico) * 100) : null;
+
+  const { error } = await supabaseClient.from('resultados_examen').insert({
+    examen_id: examenId,
+    aprendiz_id: sesion.id,
+    puntaje_obtenido: hayPreguntasAbiertas ? null : notaFinal100,
+    respuestas: respuestasGuardadas,
+    revisado: !hayPreguntasAbiertas,
+  });
+
+  if (error) {
+    alert('Error al enviar el examen: ' + error.message);
+    examenTerminado = false;
+    return;
+  }
+
+  document.getElementById('cronometro-cont').innerHTML = '';
+  document.getElementById('contenido').innerHTML = `
+    <div class="tarjeta" style="text-align:center;">
+      <h3>${porTiempo ? '⏱ Se acabó el tiempo — examen enviado automáticamente' : '✓ Examen enviado'}</h3>
+      ${hayPreguntasAbiertas
+        ? '<p class="texto-ayuda">Tienes preguntas abiertas — tu instructor revisará esas respuestas y tu nota final quedará disponible pronto.</p>'
+        : `<p class="texto-ayuda">Tu nota: <strong>${notaFinal100}</strong></p>`
+      }
+      <a href="examenes.html" class="btn btn-primario" style="margin-top:10px; display:inline-block;">Volver al calendario</a>
+    </div>
+  `;
+}
+
+inicializar();
+</script>
+</body>
+</html>

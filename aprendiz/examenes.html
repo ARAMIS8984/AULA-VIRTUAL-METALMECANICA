@@ -77,7 +77,7 @@ async function cargarActividades() {
         <div class="actividad-titulo">${a.titulo} <span class="etiqueta ${estadoClase}">${estadoTexto}</span></div>
         <div class="actividad-fechas">Del ${formatearFecha(a.fecha_inicio)} al ${formatearFecha(a.fecha_fin)}${a.tiempo_limite_minutos ? ` · ${a.tiempo_limite_minutos} min` : ''}</div>
         ${a.descripcion ? `<div class="actividad-desc">${a.descripcion}</div>` : ''}
-        ${disponible ? `<button class="btn btn-primario" style="margin-top:10px;" onclick="alert('El banco de preguntas para presentar el examen aún no está construido. Muy pronto podrás presentarlo aquí mismo.')">Presentar ahora</button>` : ''}
+        ${disponible ? `<a href="presentar-examen.html?id=${a.id}" class="btn btn-primario" style="margin-top:10px; display:inline-block; text-decoration:none;">Presentar ahora</a>` : ''}
       </div>
     `;
   }).join('');
