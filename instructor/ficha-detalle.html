@@ -104,7 +104,7 @@ async function cargarDetalleFicha() {
 
   document.getElementById('encabezado-ficha').innerHTML = `
     <h2>${ficha.nombre_grupo ? ficha.nombre_grupo + ' · ' : ''}Ficha ${ficha.numero_ficha}</h2>
-    <p style="color:var(--gris-texto); margin-top:4px;">${ficha.programa} · ${ficha.trimestre}</p>
+    <p style="color:var(--gris-texto); margin-top:4px;">${ficha.programa} · <span style="white-space:nowrap;">${ficha.trimestre}</span></p>
   `;
   document.getElementById('input-nombre-grupo').value = ficha.nombre_grupo || '';
 
@@ -120,8 +120,8 @@ async function cargarDetalleFicha() {
   document.getElementById('tabla-aprendices').innerHTML = aprendices.map(a => `
     <tr onclick="window.location.href='aprendiz-perfil.html?id=${a.id}'" style="cursor:pointer;">
       <td>${a.foto_url
-          ? `<img src="${a.foto_url}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">`
-          : `<div style="width:36px;height:36px;border-radius:50%;background:var(--gris-fondo);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--gris-texto);">${a.nombre_completo.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase()}</div>`
+          ? `<img src="${a.foto_url}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;">`
+          : `<div style="width:52px;height:52px;border-radius:50%;background:var(--gris-fondo);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:var(--gris-texto);">${a.nombre_completo.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase()}</div>`
         }</td>
       <td>${a.nombre_completo}</td>
       <td>${a.numero_documento}</td>

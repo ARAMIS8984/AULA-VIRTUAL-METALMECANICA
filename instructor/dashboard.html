@@ -77,7 +77,7 @@ async function cargarFichas() {  const cont = document.getElementById('contenedo
       <td style="white-space:nowrap;"><strong>${f.nombre_grupo || '—'}</strong></td>
       <td>${f.numero_ficha}</td>
       <td>${f.programa}</td>
-      <td>${f.trimestre}</td>
+      <td style="white-space:nowrap;">${f.trimestre}</td>
       <td>${f.total_aprendices}</td>
       <td>${new Date(f.created_at).toLocaleDateString('es-CO')}</td>
     </tr>

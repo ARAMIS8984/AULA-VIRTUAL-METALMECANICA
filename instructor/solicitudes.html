@@ -44,27 +44,41 @@ async function cargarSolicitudes() {
 
   const { data: registros, error } = await supabaseClient
     .from('asistencia')
-    .select('id, fecha, documento_justificacion_url, aprendices(nombre_completo), fichas(numero_ficha, nombre_grupo)')
+    .select('id, fecha, documento_justificacion_url, aprendices(nombre_completo, foto_url, telefono, correo), fichas(numero_ficha, nombre_grupo)')
     .eq('estado_justificacion', 'pendiente')
     .order('fecha', { ascending: false });
 
   if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
   if (!registros || registros.length === 0) { cont.innerHTML = '<p class="texto-ayuda">No hay solicitudes pendientes por revisar.</p>'; return; }
 
-  cont.innerHTML = registros.map(r => `
-    <div class="solicitud-tarjeta" id="solicitud-${r.id}">
-      <div class="solicitud-nombre">${r.aprendices?.nombre_completo || 'Aprendiz'}</div>
-      <div class="solicitud-meta">
-        Falta del ${new Date(r.fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}
-        · Ficha ${r.fichas?.numero_ficha}${r.fichas?.nombre_grupo ? ' (' + r.fichas.nombre_grupo + ')' : ''}
-      </div>
-      ${r.documento_justificacion_url ? `<p style="margin-top:8px;"><a href="${r.documento_justificacion_url}" target="_blank">Ver documento de soporte →</a></p>` : ''}
-      <div style="display:flex; gap:8px; margin-top:10px;">
-        <button class="btn btn-primario" style="font-size:0.82rem; padding:6px 14px;" onclick="resolverSolicitud('${r.id}', 'aceptada')">✓ Aceptar excusa</button>
-        <button class="btn btn-peligro" style="font-size:0.82rem; padding:6px 14px;" onclick="resolverSolicitud('${r.id}', 'rechazada')">✕ Rechazar</button>
+  cont.innerHTML = registros.map(r => {
+    const a = r.aprendices || {};
+    const whatsappUrl = a.telefono ? `https://wa.me/${a.telefono.replace(/\D/g,'').startsWith('57') ? a.telefono.replace(/\D/g,'') : '57'+a.telefono.replace(/\D/g,'')}` : null;
+    return `
+    <div class="solicitud-tarjeta" id="solicitud-${r.id}" style="display:flex; gap:12px;">
+      ${a.foto_url
+          ? `<img src="${a.foto_url}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+          : `<div style="width:52px;height:52px;border-radius:50%;background:var(--gris-fondo);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:var(--gris-texto);flex-shrink:0;">${(a.nombre_completo||'?').split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase()}</div>`
+        }
+      <div style="flex:1;">
+        <div class="solicitud-nombre">${a.nombre_completo || 'Aprendiz'}</div>
+        <div class="solicitud-meta">
+          Falta del ${new Date(r.fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}
+          · Ficha ${r.fichas?.numero_ficha}${r.fichas?.nombre_grupo ? ' (' + r.fichas.nombre_grupo + ')' : ''}
+        </div>
+        <div style="display:flex; gap:10px; margin-top:4px;">
+          ${whatsappUrl ? `<a href="${whatsappUrl}" target="_blank" style="font-size:0.75rem; color:#25D366; text-decoration:none;">💬 WhatsApp</a>` : ''}
+          ${a.correo ? `<a href="mailto:${a.correo}" style="font-size:0.75rem; color:var(--gris-texto); text-decoration:none;">✉ Correo</a>` : ''}
+        </div>
+        ${r.documento_justificacion_url ? `<p style="margin-top:8px;"><a href="${r.documento_justificacion_url}" target="_blank">Ver documento de soporte →</a></p>` : ''}
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn btn-primario" style="font-size:0.82rem; padding:6px 14px;" onclick="resolverSolicitud('${r.id}', 'aceptada')">✓ Aceptar excusa</button>
+          <button class="btn btn-peligro" style="font-size:0.82rem; padding:6px 14px;" onclick="resolverSolicitud('${r.id}', 'rechazada')">✕ Rechazar</button>
+        </div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 async function resolverSolicitud(id, decision) {
