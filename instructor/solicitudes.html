@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solicitudes de excusa - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .solicitud-tarjeta { border: 1px solid var(--gris-borde); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+  .solicitud-nombre { font-weight: 600; }
+  .solicitud-meta { font-size: 0.82rem; color: var(--gris-texto); margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Fichas</a>
+    <a href="asistencia.html">Asistencia</a>
+    <a href="material.html">Material</a>
+    <a href="examenes.html">Exámenes</a>
+    <a href="foro.html">Foro</a>
+    <a href="calificaciones.html">Calificaciones</a>
+    <a href="solicitudes.html" class="activo">Solicitudes</a>
+    <a href="reportes.html">Reportes</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:640px;">
+  <h2 style="margin-bottom:20px;">Solicitudes de excusa pendientes</h2>
+  <div id="lista-solicitudes"><p class="texto-ayuda">Cargando...</p></div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+requerirSesionInstructor();
+
+async function cargarSolicitudes() {
+  const cont = document.getElementById('lista-solicitudes');
+
+  const { data: registros, error } = await supabaseClient
+    .from('asistencia')
+    .select('id, fecha, documento_justificacion_url, aprendices(nombre_completo), fichas(numero_ficha, nombre_grupo)')
+    .eq('estado_justificacion', 'pendiente')
+    .order('fecha', { ascending: false });
+
+  if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
+  if (!registros || registros.length === 0) { cont.innerHTML = '<p class="texto-ayuda">No hay solicitudes pendientes por revisar.</p>'; return; }
+
+  cont.innerHTML = registros.map(r => `
+    <div class="solicitud-tarjeta" id="solicitud-${r.id}">
+      <div class="solicitud-nombre">${r.aprendices?.nombre_completo || 'Aprendiz'}</div>
+      <div class="solicitud-meta">
+        Falta del ${new Date(r.fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })}
+        · Ficha ${r.fichas?.numero_ficha}${r.fichas?.nombre_grupo ? ' (' + r.fichas.nombre_grupo + ')' : ''}
+      </div>
+      ${r.documento_justificacion_url ? `<p style="margin-top:8px;"><a href="${r.documento_justificacion_url}" target="_blank">Ver documento de soporte →</a></p>` : ''}
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="btn btn-primario" style="font-size:0.82rem; padding:6px 14px;" onclick="resolverSolicitud('${r.id}', 'aceptada')">✓ Aceptar excusa</button>
+        <button class="btn btn-peligro" style="font-size:0.82rem; padding:6px 14px;" onclick="resolverSolicitud('${r.id}', 'rechazada')">✕ Rechazar</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function resolverSolicitud(id, decision) {
+  const datos = { estado_justificacion: decision };
+  if (decision === 'aceptada') datos.estado = 'Excusa';
+
+  const { error } = await supabaseClient.from('asistencia').update(datos).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  cargarSolicitudes();
+}
+
+cargarSolicitudes();
+</script>
+</body>
+</html>

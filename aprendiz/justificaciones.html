@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Justificar inasistencias - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .dia-tarjeta { border: 1px solid var(--gris-borde); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+  .dia-fecha { font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Inicio</a>
+    <a href="material.html">Material</a>
+    <a href="foro.html">Foro</a>
+    <a href="calificaciones.html">Mis calificaciones</a>
+    <a href="examenes.html">Exámenes</a>
+    <a href="justificaciones.html" class="activo">Justificar inasistencias</a>
+    <a href="perfil.html">Mi perfil</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionAprendiz()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:640px;">
+  <h2 style="margin-bottom:4px;">Justificar inasistencias</h2>
+  <p class="texto-ayuda" style="margin-bottom:24px;">Sube el soporte (incapacidad, permiso, etc.) de los días que faltaste. Tu instructor revisará cada solicitud.</p>
+
+  <div id="lista-dias"><p class="texto-ayuda">Cargando...</p></div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+const sesion = requerirSesionAprendiz();
+
+async function inicializar() {
+  if (!sesion) return;
+  await cargarDias();
+}
+
+async function cargarDias() {
+  const cont = document.getElementById('lista-dias');
+  const { data: registros, error } = await supabaseClient
+    .from('asistencia')
+    .select('id, fecha, estado, documento_justificacion_url, estado_justificacion')
+    .eq('aprendiz_id', sesion.id)
+    .in('estado', ['Ausente', 'Excusa'])
+    .order('fecha', { ascending: false });
+
+  if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
+  if (!registros || registros.length === 0) { cont.innerHTML = '<p class="texto-ayuda">No tienes inasistencias registradas. ¡Bien hecho!</p>'; return; }
+
+  cont.innerHTML = registros.map(r => renderizarDia(r)).join('');
+}
+
+function renderizarDia(r) {
+  const fechaTexto = new Date(r.fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  let estadoHtml = '';
+  if (r.estado_justificacion === 'pendiente') estadoHtml = '<span class="etiqueta etiqueta-gris">Pendiente de revisión</span>';
+  else if (r.estado_justificacion === 'aceptada') estadoHtml = '<span class="etiqueta etiqueta-verde">Excusa aceptada</span>';
+  else if (r.estado_justificacion === 'rechazada') estadoHtml = '<span class="etiqueta etiqueta-rojo">Excusa rechazada — cuenta como falla</span>';
+
+  return `
+    <div class="dia-tarjeta">
+      <div class="dia-fecha">${fechaTexto} ${estadoHtml}</div>
+      ${r.documento_justificacion_url ? `
+        <p class="texto-ayuda" style="margin-top:6px;">
+          <a href="${r.documento_justificacion_url}" target="_blank">Ver documento subido →</a>
+        </p>
+      ` : ''}
+      ${(!r.estado_justificacion || r.estado_justificacion === 'rechazada') ? `
+        <div style="margin-top:10px;">
+          <input type="file" id="archivo-${r.id}" accept="image/*,application/pdf" class="oculto" onchange="subirJustificacion('${r.id}', this)">
+          <button class="btn btn-primario" style="font-size:0.82rem; padding:7px 14px;" onclick="document.getElementById('archivo-${r.id}').click()">
+            ${r.documento_justificacion_url ? '📎 Subir un nuevo soporte' : '📎 Subir soporte (foto o PDF)'}
+          </button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+async function subirJustificacion(registroId, input) {
+  const archivo = input.files[0];
+  if (!archivo) return;
+
+  try {
+    const extension = archivo.name.split('.').pop();
+    const ruta = `${sesion.id}/${registroId}_${Date.now()}.${extension}`;
+
+    const { error: errorSubida } = await supabaseClient.storage.from('justificaciones').upload(ruta, archivo, { upsert: true });
+    if (errorSubida) throw new Error(errorSubida.message);
+
+    const { data: urlPublica } = supabaseClient.storage.from('justificaciones').getPublicUrl(ruta);
+
+    const { error: errorUpdate } = await supabaseClient
+      .from('asistencia')
+      .update({ documento_justificacion_url: urlPublica.publicUrl, estado_justificacion: 'pendiente' })
+      .eq('id', registroId);
+
+    if (errorUpdate) throw new Error(errorUpdate.message);
+
+    cargarDias();
+  } catch (err) {
+    alert('Error al subir el documento: ' + err.message);
+  }
+}
+
+inicializar();
+</script>
+</body>
+</html>

@@ -31,6 +31,7 @@
     <a href="material.html">Material</a>
     <a href="foro.html">Foro</a>
     <a href="calificaciones.html">Mis calificaciones</a>
+    <a href="justificaciones.html">Justificar inasistencias</a>
     <a href="examenes.html">Exámenes</a>
     <a href="perfil.html" class="activo">Mi perfil</a>
   </nav>
@@ -49,6 +50,7 @@
 
     <input type="file" id="input-foto" accept="image/*" capture="user" class="oculto">
     <button class="btn btn-primario" style="width:100%;" onclick="document.getElementById('input-foto').click()">📷 Subir/cambiar foto</button>
+    <button class="btn btn-secundario oculto" id="btn-eliminar-foto" style="width:100%; margin-top:8px;" onclick="eliminarFoto()">🗑 Eliminar foto</button>
 
     <div class="mensaje-error" id="mensaje-error"></div>
     <div class="mensaje-error" id="mensaje-exito" style="background:rgba(57,169,0,0.1); color:var(--verde-oscuro);"></div>
@@ -153,6 +155,18 @@ function mostrarFoto(url) {
   img.src = url;
   img.classList.remove('oculto');
   document.getElementById('foto-placeholder').classList.add('oculto');
+  document.getElementById('btn-eliminar-foto').classList.remove('oculto');
+}
+
+async function eliminarFoto() {
+  if (!confirm('¿Eliminar tu foto de perfil?')) return;
+  const { error } = await supabaseClient.from('aprendices').update({ foto_url: null }).eq('id', sesion.id);
+  if (error) { mostrarError('Error al eliminar: ' + error.message); return; }
+
+  document.getElementById('foto-actual').classList.add('oculto');
+  document.getElementById('foto-placeholder').classList.remove('oculto');
+  document.getElementById('btn-eliminar-foto').classList.add('oculto');
+  mostrarExito('Foto eliminada.');
 }
 
 document.getElementById('input-foto').addEventListener('change', async (e) => {

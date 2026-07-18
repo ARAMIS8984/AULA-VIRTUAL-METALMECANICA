@@ -18,12 +18,17 @@
     <a href="examenes.html">Exámenes</a>
     <a href="foro.html">Foro</a>
     <a href="calificaciones.html">Calificaciones</a>
+    <a href="solicitudes.html">Solicitudes</a>
     <a href="reportes.html">Reportes</a>
   </nav>
   <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
 </div>
 
 <div class="contenedor" style="padding-top:32px; padding-bottom:48px;">
+  <div id="alerta-solicitudes" class="oculto" style="background:#FAEEDA; border:1px solid #BA7517; border-radius:10px; padding:12px 16px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+    <span style="color:#854F0B; font-size:0.9rem;">⚠ <strong id="conteo-solicitudes"></strong> solicitud(es) de excusa pendientes de revisar</span>
+    <a href="solicitudes.html" class="btn btn-primario" style="font-size:0.8rem; padding:6px 14px;">Revisar</a>
+  </div>
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
     <h2>Mis fichas</h2>
     <a href="crear-ficha.html" class="btn btn-primario">+ Crear ficha</a>
@@ -39,8 +44,19 @@
 <script>
 requerirSesionInstructor();
 
-async function cargarFichas() {
-  const cont = document.getElementById('contenedor-fichas');
+async function cargarAlertaSolicitudes() {
+  const { count, error } = await supabaseClient
+    .from('asistencia')
+    .select('id', { count: 'exact', head: true })
+    .eq('estado_justificacion', 'pendiente');
+
+  if (!error && count > 0) {
+    document.getElementById('conteo-solicitudes').textContent = count;
+    document.getElementById('alerta-solicitudes').classList.remove('oculto');
+  }
+}
+
+async function cargarFichas() {  const cont = document.getElementById('contenedor-fichas');
   const { data: fichas, error } = await supabaseClient
     .from('fichas')
     .select('id, numero_ficha, programa, trimestre, nombre_grupo, total_aprendices, created_at')
@@ -58,7 +74,7 @@ async function cargarFichas() {
 
   const filas = fichas.map(f => `
     <tr onclick="window.location.href='ficha-detalle.html?id=${f.id}'" style="cursor:pointer;">
-      <td><strong>${f.nombre_grupo || '—'}</strong></td>
+      <td style="white-space:nowrap;"><strong>${f.nombre_grupo || '—'}</strong></td>
       <td>${f.numero_ficha}</td>
       <td>${f.programa}</td>
       <td>${f.trimestre}</td>
@@ -80,6 +96,7 @@ async function cargarFichas() {
 }
 
 cargarFichas();
+cargarAlertaSolicitudes();
 </script>
 </body>
 </html>
