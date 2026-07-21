@@ -23,9 +23,28 @@
   .grupo-competencia { margin-bottom: 24px; }
   .grupo-competencia h4 { color: var(--azul-sena); margin-bottom: 10px; font-size: 0.95rem; }
   .lista-materiales { display: flex; flex-direction: column; gap: 10px; }
+
+  .modal-visor { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
+  .modal-visor.visible { display: flex; }
+  .modal-visor-contenido { background: var(--blanco); border-radius: 12px; width: 100%; max-width: 900px; height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
+  .modal-visor-cabecera { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--gris-borde); }
+  .modal-visor-cabecera h4 { margin: 0; font-size: 0.95rem; }
+  .modal-visor-cerrar { border: none; background: none; font-size: 1.4rem; cursor: pointer; color: var(--gris-texto); line-height: 1; }
+  .modal-visor-cuerpo { flex: 1; overflow: auto; background: var(--gris-fondo); }
+  .modal-visor-cuerpo iframe, .modal-visor-cuerpo img { width: 100%; height: 100%; border: none; object-fit: contain; display: block; }
 </style>
 </head>
 <body>
+
+<div class="modal-visor" id="modal-visor">
+  <div class="modal-visor-contenido">
+    <div class="modal-visor-cabecera">
+      <h4 id="modal-visor-titulo"></h4>
+      <button class="modal-visor-cerrar" onclick="cerrarVisor()">✕</button>
+    </div>
+    <div class="modal-visor-cuerpo" id="modal-visor-cuerpo"></div>
+  </div>
+</div>
 
 <div class="topbar">
   <div class="marca">Aula<span>SENA</span></div>
@@ -360,7 +379,10 @@ async function cargarListaMaterial(fichaId) {
               <div class="titulo">${m.titulo}</div>
               ${m.descripcion ? `<div class="descripcion">${m.descripcion}</div>` : ''}
               <div class="meta">
-                <a href="${m.url_archivo}" target="_blank" style="color:var(--azul-sena); font-weight:600;">Abrir →</a>
+                ${m.tipo === 'documento'
+                    ? `<a href="#" onclick="abrirVisor('${m.url_archivo}', '${m.titulo.replace(/'/g,"\\'")}'); return false;" style="color:var(--azul-sena); font-weight:600;">👁 Ver</a> · <a href="${m.url_archivo}" download target="_blank" style="color:var(--verde-oscuro); font-weight:600;">⬇ Descargar</a>`
+                    : `<a href="${m.url_archivo}" target="_blank" style="color:var(--azul-sena); font-weight:600;">Abrir →</a>`
+                  }
                 ${m.competencias?.nombre ? ` · <span class="etiqueta etiqueta-gris">${m.competencias.nombre}</span>` : ''}
                 · ${new Date(m.created_at).toLocaleDateString('es-CO')}
               </div>
@@ -397,6 +419,29 @@ function mostrarExito(texto) {
 function ocultarMensajes() {
   document.getElementById('mensaje-error').classList.remove('visible');
   document.getElementById('mensaje-exito').classList.remove('visible');
+}
+
+function abrirVisor(url, titulo) {
+  const extension = url.split('?')[0].split('.').pop().toLowerCase();
+  const cuerpo = document.getElementById('modal-visor-cuerpo');
+
+  if (['jpg','jpeg','png','gif','webp'].includes(extension)) {
+    cuerpo.innerHTML = `<img src="${url}" alt="${titulo}">`;
+  } else if (extension === 'pdf') {
+    cuerpo.innerHTML = `<iframe src="${url}"></iframe>`;
+  } else if (['doc','docx','ppt','pptx','xls','xlsx'].includes(extension)) {
+    cuerpo.innerHTML = `<iframe src="https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}"></iframe>`;
+  } else {
+    cuerpo.innerHTML = `<div style="padding:40px; text-align:center;"><p class="texto-ayuda">Este tipo de archivo no se puede previsualizar aquí.</p><a href="${url}" target="_blank" class="btn btn-primario" style="margin-top:10px; display:inline-block;">Abrir en una pestaña nueva</a></div>`;
+  }
+
+  document.getElementById('modal-visor-titulo').textContent = titulo;
+  document.getElementById('modal-visor').classList.add('visible');
+}
+
+function cerrarVisor() {
+  document.getElementById('modal-visor').classList.remove('visible');
+  document.getElementById('modal-visor-cuerpo').innerHTML = '';
 }
 
 cargarFichas();

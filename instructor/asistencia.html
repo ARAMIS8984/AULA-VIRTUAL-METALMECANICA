@@ -120,14 +120,12 @@
         <button class="btn btn-secundario" onclick="marcarTodos('Presente')">Marcar todos presentes</button>
         <button class="btn btn-secundario" onclick="marcarTodos('Ausente')">Marcar todos ausentes</button>
       </div>
+      <p id="progreso-marcado" style="margin-top:10px; font-size:0.85rem; color:var(--gris-texto);"></p>
     </div>
     <div id="lista-aprendices">
       <p style="color:var(--gris-texto); padding:20px;">Selecciona una ficha para comenzar.</p>
     </div>
-  </div>
-
-  <div class="fila-acciones">
-    <button class="btn btn-primario" id="btn-guardar" onclick="guardarAsistencia()" disabled>Guardar asistencia</button>
+    <div id="lista-marcados" style="padding:0 20px 16px;"></div>
   </div>
 </div>
 
@@ -140,9 +138,8 @@ const parametros = new URLSearchParams(window.location.search);
 const fichaIdInicial = parametros.get('ficha_id');
 
 let aprendicesActuales = [];
-let estadosSeleccionados = {}; // { aprendiz_id: 'Presente' | 'Ausente' | 'Excusa' | 'Tarde' }
-let observacionesSeleccionadas = {}; // { aprendiz_id: 'texto de justificación' }
-let idsAsistenciaExistente = {}; // { aprendiz_id: registro_id } para saber si es update o insert
+let aprendicesPendientes = [];
+let aprendicesMarcados = []; // [{ aprendiz, estado, registroId, observacion }]
 let fichaDefecto = { competencia_defecto_id: null, resultados_defecto: [] };
 
 document.getElementById('fecha-asistencia').valueAsDate = new Date();
@@ -273,10 +270,6 @@ async function cargarAprendices(fichaId) {
 
   if (error || !aprendices) return;
   aprendicesActuales = aprendices;
-  estadosSeleccionados = {};
-  aprendices.forEach(a => estadosSeleccionados[a.id] = 'Presente');
-  renderizarLista();
-  document.getElementById('btn-guardar').disabled = aprendices.length === 0;
 }
 
 async function cargarCompetencias(fichaId) {
@@ -416,67 +409,166 @@ async function cargarSesionesDelDia() {
 }
 
 function renderizarLista() {
-  const cont = document.getElementById('lista-aprendices');
+  const contPendientes = document.getElementById('lista-aprendices');
+  const contMarcados = document.getElementById('lista-marcados');
+  const contProgreso = document.getElementById('progreso-marcado');
+
   if (aprendicesActuales.length === 0) {
-    cont.innerHTML = '<p style="color:var(--gris-texto); padding:20px;">Esta ficha no tiene aprendices registrados.</p>';
+    contPendientes.innerHTML = '<p style="color:var(--gris-texto); padding:20px;">Esta ficha no tiene aprendices registrados.</p>';
+    contMarcados.innerHTML = '';
+    contProgreso.innerHTML = '';
     return;
   }
 
-  cont.innerHTML = aprendicesActuales.map(a => `
-    <div class="fila-aprendiz" style="flex-wrap:wrap;">
-      <div style="display:flex; align-items:center; gap:10px;">
-        ${a.foto_url
-            ? `<img src="${a.foto_url}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
-            : `<div style="width:48px;height:48px;border-radius:50%;background:var(--gris-fondo);display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--gris-texto);flex-shrink:0;">${a.nombre_completo.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase()}</div>`
-          }
-        <div>
-          <div class="nombre">${a.nombre_completo}</div>
-          <div class="doc">${a.numero_documento}</div>
-          <div style="display:flex; gap:10px; margin-top:3px;">
-            <a href="aprendiz-perfil.html?id=${a.id}" style="font-size:0.72rem; color:var(--azul-sena); text-decoration:none;" target="_blank">👤 Ver perfil</a>
-            ${a.telefono ? `<a href="https://wa.me/${a.telefono.replace(/\D/g,'').startsWith('57') ? a.telefono.replace(/\D/g,'') : '57'+a.telefono.replace(/\D/g,'')}" style="font-size:0.72rem; color:#25D366; text-decoration:none;" target="_blank">💬 WhatsApp</a>` : ''}
-            ${a.correo ? `<a href="mailto:${a.correo}" style="font-size:0.72rem; color:var(--gris-texto); text-decoration:none;">✉ Correo</a>` : ''}
+  contProgreso.innerHTML = `<strong>${aprendicesMarcados.length}</strong> de <strong>${aprendicesActuales.length}</strong> marcados`;
+
+  if (aprendicesPendientes.length === 0) {
+    contPendientes.innerHTML = '<p style="color:var(--verde-oscuro); padding:20px; text-align:center;">✓ Ya marcaste a todos los aprendices de esta sesión.</p>';
+  } else {
+    contPendientes.innerHTML = aprendicesPendientes.map(a => `
+      <div class="fila-aprendiz" style="flex-wrap:wrap;" id="fila-${a.id}">
+        <div style="display:flex; align-items:center; gap:10px;">
+          ${a.foto_url
+              ? `<img src="${a.foto_url}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+              : `<div style="width:48px;height:48px;border-radius:50%;background:var(--gris-fondo);display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--gris-texto);flex-shrink:0;">${a.nombre_completo.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase()}</div>`
+            }
+          <div>
+            <div class="nombre">${a.nombre_completo}</div>
+            <div class="doc">${a.numero_documento}</div>
+            <div style="display:flex; gap:10px; margin-top:3px;">
+              <a href="aprendiz-perfil.html?id=${a.id}" style="font-size:0.72rem; color:var(--azul-sena); text-decoration:none;" target="_blank">👤 Ver perfil</a>
+              ${a.telefono ? `<a href="https://wa.me/${a.telefono.replace(/\D/g,'').startsWith('57') ? a.telefono.replace(/\D/g,'') : '57'+a.telefono.replace(/\D/g,'')}" style="font-size:0.72rem; color:#25D366; text-decoration:none;" target="_blank">💬 WhatsApp</a>` : ''}
+              ${a.correo ? `<a href="mailto:${a.correo}" style="font-size:0.72rem; color:var(--gris-texto); text-decoration:none;">✉ Correo</a>` : ''}
+            </div>
           </div>
         </div>
+        <div class="opciones-estado" data-aprendiz="${a.id}">
+          <button type="button" class="sel-presente" onclick="marcarEstadoRapido('${a.id}','Presente')">Presente</button>
+          <button type="button" class="sel-ausente" onclick="marcarEstadoRapido('${a.id}','Ausente')">Ausente</button>
+          <button type="button" class="sel-excusa" onclick="marcarEstadoRapido('${a.id}','Excusa')">Excusa</button>
+          <button type="button" class="sel-tarde" onclick="marcarEstadoRapido('${a.id}','Tarde')">Tarde</button>
+        </div>
       </div>
-      <div class="opciones-estado" data-aprendiz="${a.id}">
-        <button type="button" class="sel-presente" onclick="marcarEstado('${a.id}','Presente')">Presente</button>
-        <button type="button" class="sel-ausente" onclick="marcarEstado('${a.id}','Ausente')">Ausente</button>
-        <button type="button" class="sel-excusa" onclick="marcarEstado('${a.id}','Excusa')">Excusa</button>
-        <button type="button" class="sel-tarde" onclick="marcarEstado('${a.id}','Tarde')">Tarde</button>
-      </div>
-      <input type="text" class="input-observacion oculto" data-aprendiz-obs="${a.id}"
-        placeholder="Justificación (opcional)" value="${observacionesSeleccionadas[a.id] || ''}"
-        oninput="observacionesSeleccionadas['${a.id}'] = this.value"
-        style="width:100%; margin-top:4px; padding:6px 10px; font-size:0.82rem;">
-    </div>
-  `).join('');
+    `).join('');
+  }
 
-  aplicarEstadosVisuales();
+  if (aprendicesMarcados.length === 0) {
+    contMarcados.innerHTML = '';
+  } else {
+    const colorEstado = { Presente: 'etiqueta-verde', Ausente: 'etiqueta-rojo', Excusa: 'etiqueta-gris', Tarde: 'etiqueta-gris' };
+    contMarcados.innerHTML = `
+      <p class="texto-ayuda" style="margin:16px 0 8px;">Ya marcados (clic en "Deshacer" para corregir):</p>
+      ${aprendicesMarcados.map(m => `
+        <div class="fila-aprendiz" style="padding:8px 0;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="etiqueta ${colorEstado[m.estado] || 'etiqueta-gris'}">${m.estado}</span>
+            <span style="font-size:0.85rem;">${m.aprendiz.nombre_completo}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            ${(m.estado === 'Ausente' || m.estado === 'Excusa' || m.estado === 'Tarde') ? `
+              <input type="text" placeholder="Justificación (opcional)" value="${m.observacion || ''}"
+                onchange="actualizarObservacion('${m.aprendiz.id}', this.value)"
+                style="font-size:0.78rem; padding:4px 8px; width:160px;">
+            ` : ''}
+            <button type="button" onclick="deshacerMarca('${m.aprendiz.id}')" style="border:none; background:none; color:var(--rojo-error); cursor:pointer; font-size:0.75rem;">Deshacer</button>
+          </div>
+        </div>
+      `).join('')}
+    `;
+  }
 }
 
-function marcarEstado(aprendizId, estado) {
-  estadosSeleccionados[aprendizId] = estado;
-  aplicarEstadosVisuales();
+async function marcarEstadoRapido(aprendizId, estado) {
+  const fichaId = document.getElementById('select-ficha').value;
+  const fecha = document.getElementById('fecha-asistencia').value;
+  const competenciaId = document.getElementById('select-competencia').value || null;
+  const aprendiz = aprendicesPendientes.find(a => a.id === aprendizId);
+  if (!aprendiz || !fichaId || !fecha) return;
+
+  const fila = document.getElementById(`fila-${aprendizId}`);
+  if (fila) fila.style.opacity = '0.4';
+
+  const registro = {
+    ficha_id: fichaId,
+    aprendiz_id: aprendizId,
+    fecha: fecha,
+    estado: estado,
+    competencia_id: competenciaId,
+    resultados_ra: obtenerResultadosSeleccionados(),
+    observacion: null,
+  };
+
+  const { data, error } = await supabaseClient
+    .from('asistencia')
+    .upsert(registro, { onConflict: 'aprendiz_id,fecha,competencia_id' })
+    .select()
+    .single();
+
+  if (error) {
+    mostrarError('Error al guardar: ' + error.message);
+    if (fila) fila.style.opacity = '1';
+    return;
+  }
+
+  aprendicesPendientes = aprendicesPendientes.filter(a => a.id !== aprendizId);
+  aprendicesMarcados.unshift({ aprendiz, estado, registroId: data.id, observacion: null });
+  renderizarLista();
 }
 
-function marcarTodos(estado) {
-  aprendicesActuales.forEach(a => estadosSeleccionados[a.id] = estado);
-  aplicarEstadosVisuales();
-}
+async function marcarTodos(estado) {
+  const fichaId = document.getElementById('select-ficha').value;
+  const fecha = document.getElementById('fecha-asistencia').value;
+  const competenciaId = document.getElementById('select-competencia').value || null;
+  if (!fichaId || !fecha || aprendicesPendientes.length === 0) return;
 
-function aplicarEstadosVisuales() {
-  document.querySelectorAll('.opciones-estado').forEach(grupo => {
-    const aprendizId = grupo.dataset.aprendiz;
-    const estado = estadosSeleccionados[aprendizId];
-    grupo.querySelectorAll('button').forEach(btn => btn.classList.remove('activo'));
-    const mapa = { Presente: '.sel-presente', Ausente: '.sel-ausente', Excusa: '.sel-excusa', Tarde: '.sel-tarde' };
-    const btnActivo = grupo.querySelector(mapa[estado]);
-    if (btnActivo) btnActivo.classList.add('activo');
+  const resultados = obtenerResultadosSeleccionados();
+  const registros = aprendicesPendientes.map(a => ({
+    ficha_id: fichaId,
+    aprendiz_id: a.id,
+    fecha: fecha,
+    estado: estado,
+    competencia_id: competenciaId,
+    resultados_ra: resultados,
+    observacion: null,
+  }));
 
-    const inputObs = document.querySelector(`[data-aprendiz-obs="${aprendizId}"]`);
-    if (inputObs) inputObs.classList.toggle('oculto', estado === 'Presente');
+  const { data, error } = await supabaseClient
+    .from('asistencia')
+    .upsert(registros, { onConflict: 'aprendiz_id,fecha,competencia_id' })
+    .select();
+
+  if (error) { mostrarError('Error al guardar: ' + error.message); return; }
+
+  const idsPorAprendiz = {};
+  (data || []).forEach(r => idsPorAprendiz[r.aprendiz_id] = r.id);
+
+  aprendicesPendientes.forEach(a => {
+    aprendicesMarcados.unshift({ aprendiz: a, estado, registroId: idsPorAprendiz[a.id], observacion: null });
   });
+  aprendicesPendientes = [];
+  renderizarLista();
+}
+
+async function deshacerMarca(aprendizId) {
+  const indice = aprendicesMarcados.findIndex(m => m.aprendiz.id === aprendizId);
+  if (indice === -1) return;
+  const marca = aprendicesMarcados[indice];
+
+  const { error } = await supabaseClient.from('asistencia').delete().eq('id', marca.registroId);
+  if (error) { mostrarError('Error al deshacer: ' + error.message); return; }
+
+  aprendicesMarcados.splice(indice, 1);
+  aprendicesPendientes.push(marca.aprendiz);
+  aprendicesPendientes.sort((a, b) => a.nombre_completo.localeCompare(b.nombre_completo));
+  renderizarLista();
+}
+
+async function actualizarObservacion(aprendizId, texto) {
+  const marca = aprendicesMarcados.find(m => m.aprendiz.id === aprendizId);
+  if (!marca) return;
+  const { error } = await supabaseClient.from('asistencia').update({ observacion: texto || null }).eq('id', marca.registroId);
+  if (error) { mostrarError('Error al guardar la justificación: ' + error.message); return; }
+  marca.observacion = texto;
 }
 
 async function cargarAsistenciaExistente() {
@@ -497,73 +589,29 @@ async function cargarAsistenciaExistente() {
 
   const { data: registros, error } = await consulta;
 
-  idsAsistenciaExistente = {};
-
-  // Reiniciar a "Presente" por defecto antes de aplicar lo que exista para esta competencia
-  aprendicesActuales.forEach(a => {
-    estadosSeleccionados[a.id] = 'Presente';
-    observacionesSeleccionadas[a.id] = '';
-  });
-  // Si no hay asistencia guardada aún para este día, se dejan marcados los resultados
-  // predeterminados de la ficha (en vez de vaciarlos) para no repetir la selección.
+  // Resultados de aprendizaje predeterminados de la ficha, si no hay nada guardado aún
   const resultadosBase = (competenciaId === fichaDefecto.competencia_defecto_id) ? fichaDefecto.resultados_defecto : [];
   marcarResultadosSeleccionados(resultadosBase);
 
-  if (!error && registros) {
-    registros.forEach(r => {
-      estadosSeleccionados[r.aprendiz_id] = r.estado;
-      observacionesSeleccionadas[r.aprendiz_id] = r.observacion || '';
-      idsAsistenciaExistente[r.aprendiz_id] = r.id;
-    });
-    if (registros.length > 0 && registros[0].resultados_ra) {
-      marcarResultadosSeleccionados(registros[0].resultados_ra);
+  const registroPorAprendiz = {};
+  (registros || []).forEach(r => registroPorAprendiz[r.aprendiz_id] = r);
+
+  aprendicesMarcados = [];
+  aprendicesPendientes = [];
+  aprendicesActuales.forEach(a => {
+    const r = registroPorAprendiz[a.id];
+    if (r) {
+      aprendicesMarcados.push({ aprendiz: a, estado: r.estado, registroId: r.id, observacion: r.observacion || '' });
+    } else {
+      aprendicesPendientes.push(a);
     }
+  });
+
+  if (!error && registros && registros.length > 0 && registros[0].resultados_ra) {
+    marcarResultadosSeleccionados(registros[0].resultados_ra);
   }
+
   renderizarLista();
-}
-
-async function guardarAsistencia() {
-  ocultarMensajes();
-  const fichaId = document.getElementById('select-ficha').value;
-  const fecha = document.getElementById('fecha-asistencia').value;
-  const competenciaId = document.getElementById('select-competencia').value || null;
-  const resultadosSeleccionados = obtenerResultadosSeleccionados();
-
-  if (!fichaId || !fecha) {
-    mostrarError('Selecciona una ficha y una fecha.');
-    return;
-  }
-
-  const boton = document.getElementById('btn-guardar');
-  boton.disabled = true;
-  boton.textContent = 'Guardando...';
-
-  const registros = aprendicesActuales.map(a => ({
-    ficha_id: fichaId,
-    aprendiz_id: a.id,
-    fecha: fecha,
-    estado: estadosSeleccionados[a.id] || 'Presente',
-    competencia_id: competenciaId,
-    resultados_ra: resultadosSeleccionados,
-    observacion: estadosSeleccionados[a.id] !== 'Presente' ? (observacionesSeleccionadas[a.id] || null) : null,
-  }));
-
-  const { error } = await supabaseClient
-    .from('asistencia')
-    .upsert(registros, { onConflict: 'aprendiz_id,fecha,competencia_id' });
-
-  boton.disabled = false;
-  boton.textContent = 'Guardar asistencia';
-
-  if (error) {
-    mostrarError('Error al guardar: ' + error.message);
-    return;
-  }
-
-  const etiquetaCompetencia = document.getElementById('select-competencia').selectedOptions[0]?.textContent || 'Sin especificar';
-  mostrarExito(`Asistencia guardada para ${aprendicesActuales.length} aprendices el ${fecha} (${etiquetaCompetencia}).`);
-  cargarSesionesDelDia();
-  cargarDiasRegistrados();
 }
 
 function mostrarError(texto) {
