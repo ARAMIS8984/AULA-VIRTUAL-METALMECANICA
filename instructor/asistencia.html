@@ -174,11 +174,15 @@ async function alCambiarFicha() {
   if (!fichaId) return;
 
   localStorage.setItem('aulasena_ultima_ficha', fichaId);
-  await cargarFichaDefecto(fichaId);
-  await Promise.all([cargarAprendices(fichaId), cargarCompetencias(fichaId)]);
-  await aplicarPredeterminado();
-  cargarAsistenciaExistente();
-  cargarDiasRegistrados();
+  try {
+    await cargarFichaDefecto(fichaId);
+    await Promise.all([cargarAprendices(fichaId), cargarCompetencias(fichaId)]);
+    await aplicarPredeterminado();
+    await cargarAsistenciaExistente();
+    await cargarDiasRegistrados();
+  } catch (err) {
+    mostrarError('Ocurrió un error al cargar esta ficha: ' + err.message);
+  }
 }
 
 async function cargarFichaDefecto(fichaId) {
@@ -282,7 +286,6 @@ async function cargarCompetencias(fichaId) {
   const select = document.getElementById('select-competencia');
   select.innerHTML = '<option value="">Sin especificar</option>' +
     (competencias || []).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-  document.getElementById('select-resultado').innerHTML = '<option value="">Sin especificar</option>';
   await cargarSesionesDelDia();
 }
 

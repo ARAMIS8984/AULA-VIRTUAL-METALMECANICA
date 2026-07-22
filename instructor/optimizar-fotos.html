@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Optimizar fotos existentes - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .fila-progreso { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--gris-borde); font-size: 0.85rem; }
+  .barra-total { background: var(--gris-borde); border-radius: 8px; height: 10px; overflow: hidden; margin: 16px 0; }
+  .barra-total-interna { height: 100%; background: var(--verde-sena); border-radius: 8px; transition: width 0.3s; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="marca">Aula<span>SENA</span></div>
+  <nav>
+    <a href="dashboard.html">Fichas</a>
+  </nav>
+  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
+</div>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:600px;">
+  <h2 style="margin-bottom:4px;">Optimizar fotos existentes</h2>
+  <p class="texto-ayuda" style="margin-bottom:20px;">Herramienta de un solo uso: reduce el tamaño de las fotos de perfil que ya estaban subidas antes de que activáramos la compresión automática. No afecta la foto en sí, solo su peso — se va a ver igual pero cargará más rápido.</p>
+
+  <div class="tarjeta">
+    <p id="conteo-inicial" class="texto-ayuda">Cargando cuántas fotos hay para optimizar...</p>
+    <button class="btn btn-primario" id="btn-iniciar" style="width:100%; margin-top:10px;" onclick="iniciarOptimizacion()" disabled>Iniciar optimización</button>
+    <div class="barra-total oculto" id="barra-cont"><div class="barra-total-interna" id="barra-interna" style="width:0%;"></div></div>
+    <p class="texto-ayuda" id="texto-progreso"></p>
+  </div>
+
+  <div id="lista-resultado" style="margin-top:16px;"></div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/image-utils.js"></script>
+<script>
+requerirSesionInstructor();
+
+let aprendicesConFoto = [];
+
+async function inicializar() {
+  const { data, error } = await supabaseClient
+    .from('aprendices')
+    .select('id, nombre_completo, foto_url')
+    .not('foto_url', 'is', null);
+
+  if (error) { document.getElementById('conteo-inicial').textContent = 'Error: ' + error.message; return; }
+
+  aprendicesConFoto = data || [];
+  document.getElementById('conteo-inicial').textContent = `Se encontraron ${aprendicesConFoto.length} foto(s) de perfil para optimizar.`;
+  document.getElementById('btn-iniciar').disabled = aprendicesConFoto.length === 0;
+}
+
+async function iniciarOptimizacion() {
+  document.getElementById('btn-iniciar').disabled = true;
+  document.getElementById('barra-cont').classList.remove('oculto');
+  const lista = document.getElementById('lista-resultado');
+  lista.innerHTML = '';
+
+  let completados = 0;
+  for (const a of aprendicesConFoto) {
+    try {
+      const respuesta = await fetch(a.foto_url);
+      const blobOriginal = await respuesta.blob();
+      const archivoOriginal = new File([blobOriginal], 'foto.jpg', { type: blobOriginal.type || 'image/jpeg' });
+      const pesoOriginalKB = Math.round(archivoOriginal.size / 1024);
+
+      const archivoComprimido = await comprimirImagen(archivoOriginal);
+      const pesoNuevoKB = Math.round(archivoComprimido.size / 1024);
+
+      const rutaArchivo = `${a.id}/${Date.now()}.jpg`;
+      const { error: errorSubida } = await supabaseClient.storage.from('fotos-aprendices').upload(rutaArchivo, archivoComprimido, { upsert: true });
+      if (errorSubida) throw new Error(errorSubida.message);
+
+      const { data: urlPublica } = supabaseClient.storage.from('fotos-aprendices').getPublicUrl(rutaArchivo);
+      await supabaseClient.from('aprendices').update({ foto_url: urlPublica.publicUrl }).eq('id', a.id);
+
+      lista.innerHTML += `<div class="fila-progreso"><span>${a.nombre_completo}</span><span style="color:var(--verde-oscuro);">${pesoOriginalKB} KB → ${pesoNuevoKB} KB ✓</span></div>`;
+    } catch (err) {
+      lista.innerHTML += `<div class="fila-progreso"><span>${a.nombre_completo}</span><span style="color:var(--rojo-error);">Error: ${err.message}</span></div>`;
+    }
+
+    completados++;
+    const porcentaje = Math.round((completados / aprendicesConFoto.length) * 100);
+    document.getElementById('barra-interna').style.width = porcentaje + '%';
+    document.getElementById('texto-progreso').textContent = `${completados} de ${aprendicesConFoto.length} procesados...`;
+  }
+
+  document.getElementById('texto-progreso').textContent = `✓ Listo. ${completados} foto(s) optimizadas.`;
+}
+
+inicializar();
+</script>
+</body>
+</html>
