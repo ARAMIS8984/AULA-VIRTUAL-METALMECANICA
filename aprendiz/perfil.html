@@ -49,7 +49,11 @@
     <p class="texto-ayuda" style="margin-bottom:12px;">Sube una foto tuya con el uniforme de trabajo, para que tu instructor pueda identificarte.</p>
 
     <input type="file" id="input-foto" accept="image/*" capture="user" class="oculto">
-    <button class="btn btn-primario" style="width:100%;" onclick="document.getElementById('input-foto').click()">📷 Subir/cambiar foto</button>
+    <input type="file" id="input-foto-galeria" accept="image/*" class="oculto">
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-primario" style="flex:1;" onclick="document.getElementById('input-foto').click()">📷 Tomar foto</button>
+      <button class="btn btn-secundario" style="flex:1;" onclick="document.getElementById('input-foto-galeria').click()">🖼 Elegir de galería</button>
+    </div>
     <button class="btn btn-secundario oculto" id="btn-eliminar-foto" style="width:100%; margin-top:8px;" onclick="eliminarFoto()">🗑 Eliminar foto</button>
 
     <div class="mensaje-error" id="mensaje-error"></div>
@@ -99,6 +103,7 @@
 
 <script src="../js/supabase-config.js"></script>
 <script src="../js/auth.js"></script>
+<script src="../js/image-utils.js"></script>
 <script>
 const sesion = requerirSesionAprendiz();
 
@@ -169,19 +174,17 @@ async function eliminarFoto() {
   mostrarExito('Foto eliminada.');
 }
 
-document.getElementById('input-foto').addEventListener('change', async (e) => {
-  const archivo = e.target.files[0];
-  if (!archivo) return;
+async function subirFotoPerfil(archivo) {
   ocultarMensajes();
-
   try {
-    const extension = archivo.name.split('.').pop();
+    const archivoComprimido = await comprimirImagen(archivo);
+    const extension = archivoComprimido.name.split('.').pop();
     const rutaArchivo = `${sesion.id}/${Date.now()}.${extension}`;
 
     const { error: errorSubida } = await supabaseClient
       .storage
       .from('fotos-aprendices')
-      .upload(rutaArchivo, archivo, { upsert: true });
+      .upload(rutaArchivo, archivoComprimido, { upsert: true });
 
     if (errorSubida) throw new Error(errorSubida.message);
 
@@ -202,6 +205,13 @@ document.getElementById('input-foto').addEventListener('change', async (e) => {
   } catch (err) {
     mostrarError('Error al subir la foto: ' + err.message);
   }
+}
+
+document.getElementById('input-foto').addEventListener('change', (e) => {
+  if (e.target.files[0]) subirFotoPerfil(e.target.files[0]);
+});
+document.getElementById('input-foto-galeria').addEventListener('change', (e) => {
+  if (e.target.files[0]) subirFotoPerfil(e.target.files[0]);
 });
 
 function mostrarError(texto) {

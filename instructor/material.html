@@ -157,6 +157,7 @@
 
 <script src="../js/supabase-config.js"></script>
 <script src="../js/auth.js"></script>
+<script src="../js/image-utils.js"></script>
 <script>
 requerirSesionInstructor();
 
@@ -279,13 +280,14 @@ async function guardarMaterial() {
     if (tipo === 'documento') {
       if (!archivoSeleccionado) throw new Error('Debes seleccionar un archivo.');
 
-      const nombreLimpio = archivoSeleccionado.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+      const archivoAsubir = await comprimirImagen(archivoSeleccionado);
+      const nombreLimpio = archivoAsubir.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
       const rutaArchivo = `${fichaId}/${Date.now()}_${nombreLimpio}`;
 
       const { error: errorSubida } = await supabaseClient
         .storage
         .from('material-formacion')
-        .upload(rutaArchivo, archivoSeleccionado);
+        .upload(rutaArchivo, archivoAsubir);
 
       if (errorSubida) throw new Error('Error al subir el archivo: ' + errorSubida.message);
 

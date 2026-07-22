@@ -57,7 +57,7 @@ async function cargarSolicitudes() {
     return `
     <div class="solicitud-tarjeta" id="solicitud-${r.id}" style="display:flex; gap:12px;">
       ${a.foto_url
-          ? `<img src="${a.foto_url}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+          ? `<img src="${a.foto_url}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;" loading="lazy">`
           : `<div style="width:52px;height:52px;border-radius:50%;background:var(--gris-fondo);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:var(--gris-texto);flex-shrink:0;">${(a.nombre_completo||'?').split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase()}</div>`
         }
       <div style="flex:1;">
