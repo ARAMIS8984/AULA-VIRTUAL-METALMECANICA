@@ -105,7 +105,10 @@ async function inicializar() {
     .eq('aprendiz_id', sesion.id);
 
   const totalDias = (registrosAsistencia || []).length;
-  const presentes = (registrosAsistencia || []).filter(r => r.estado === 'Presente' || r.estado === 'Tarde').length;
+  // Presente cuenta completo, Tarde cuenta como media falta (0.5) — regla interna
+  const totalPresentes = (registrosAsistencia || []).filter(r => r.estado === 'Presente').length;
+  const totalTardes = (registrosAsistencia || []).filter(r => r.estado === 'Tarde').length;
+  const presentes = totalPresentes + totalTardes * 0.5;
   const pctAsistencia = totalDias > 0 ? Math.round((presentes / totalDias) * 100) : null;
   const notaAsistencia = pctAsistencia === null ? null : (pctAsistencia >= minimoAsistencia ? 100 : 0);
 

@@ -164,8 +164,8 @@ async function cargarReporte() {
     const ausente = registrosAprendiz.filter(r => r.estado === 'Ausente').length;
     const excusa = registrosAprendiz.filter(r => r.estado === 'Excusa').length;
     const tarde = registrosAprendiz.filter(r => r.estado === 'Tarde').length;
-    // Cuentan como asistencia efectiva: Presente + Tarde
-    const porcentaje = dias > 0 ? Math.round(((presente + tarde) / dias) * 100) : 0;
+    // Presente cuenta completo, Tarde cuenta como media falta (0.5) — regla interna
+    const porcentaje = dias > 0 ? Math.round(((presente + tarde * 0.5) / dias) * 100) : 0;
     return {
       id: a.id,
       nombre: a.nombre_completo,

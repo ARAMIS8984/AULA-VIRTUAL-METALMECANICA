@@ -215,7 +215,10 @@ async function cargarAsistencia(aprendiz) {
 
   datosReporte.asistencia = registros || [];
   const total = (registros || []).length;
-  const presentes = (registros || []).filter(r => r.estado === 'Presente' || r.estado === 'Tarde').length;
+  // Presente cuenta completo, Tarde cuenta como media falta (0.5) — regla interna
+  const totalPresentes = (registros || []).filter(r => r.estado === 'Presente').length;
+  const totalTardes = (registros || []).filter(r => r.estado === 'Tarde').length;
+  const presentes = totalPresentes + totalTardes * 0.5;
   const pct = total > 0 ? Math.round((presentes / total) * 100) : null;
 
   document.getElementById('valor-asistencia').textContent = pct !== null ? pct + '%' : '—';
