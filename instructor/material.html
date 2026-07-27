@@ -71,9 +71,9 @@
     </div>
   </div>
 
-  <!-- Formulario para agregar material -->
+  <!-- Formulario para agregar/editar material -->
   <div class="tarjeta espaciado-v" style="margin-bottom:24px;">
-    <h3 style="margin-bottom:4px;">Agregar material</h3>
+    <h3 style="margin-bottom:4px;" id="titulo-formulario">Agregar material</h3>
 
     <div class="campo" style="margin-bottom:0;">
       <label for="titulo-material">Título</label>
@@ -119,6 +119,7 @@
 
     <div id="bloque-archivo" class="campo" style="margin-bottom:0;">
       <label>Archivo</label>
+      <p id="archivo-actual-texto" class="texto-ayuda oculto" style="margin:0 0 6px;"></p>
       <div class="zona-carga" id="zona-carga" onclick="document.getElementById('input-archivo').click()">
         <div class="icono">📎</div>
         <p id="texto-zona-carga"><strong>Haz clic para subir</strong> o arrastra el archivo aquí</p>
@@ -146,7 +147,10 @@
     <div class="mensaje-error" id="mensaje-error"></div>
     <div class="mensaje-error" id="mensaje-exito" style="background:rgba(57,169,0,0.1); color:var(--verde-oscuro);"></div>
 
-    <button class="btn btn-primario" id="btn-guardar-material" onclick="guardarMaterial()">+ Agregar material</button>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-primario" id="btn-guardar-material" onclick="guardarMaterial()">+ Agregar material</button>
+      <button class="btn btn-secundario oculto" id="btn-cancelar-edicion" onclick="cancelarEdicion()">Cancelar edición</button>
+    </div>
   </div>
 
   <!-- Lista de material existente -->
@@ -162,6 +166,8 @@
 requerirSesionInstructor();
 
 const ICONOS_TIPO = { documento: '📄', enlace: '🔗', video: '🎬' };
+let materialEditandoId = null;
+let materialEditandoUrlActual = null;
 
 async function cargarFichas() {
   const { data: fichas, error } = await supabaseClient
@@ -204,7 +210,7 @@ async function cargarCompetenciasMaterial(fichaId) {
   document.getElementById('checks-resultados-material').innerHTML = '<p class="texto-ayuda" style="margin:0;">Elige una competencia primero.</p>';
 }
 
-async function cargarResultadosMaterial() {
+async function cargarResultadosMaterial(resultadosPreseleccionados = []) {
   const competenciaId = document.getElementById('select-competencia-material').value;
   const cont = document.getElementById('checks-resultados-material');
   if (!competenciaId) {
@@ -223,7 +229,7 @@ async function cargarResultadosMaterial() {
   }
   cont.innerHTML = resultados.map(r => `
     <label style="display:flex; align-items:flex-start; gap:8px; padding:5px 0; font-weight:400; font-size:0.85rem; cursor:pointer;">
-      <input type="checkbox" class="check-resultado-material" value="${r.id}" style="margin-top:3px;">
+      <input type="checkbox" class="check-resultado-material" value="${r.id}" ${resultadosPreseleccionados.includes(r.id) ? 'checked' : ''} style="margin-top:3px;">
       <span>${r.nombre}</span>
     </label>
   `).join('');
@@ -270,6 +276,7 @@ async function guardarMaterial() {
   if (!fichaId) { mostrarError('Selecciona una ficha.'); return; }
   if (!titulo) { mostrarError('El título es obligatorio.'); return; }
 
+  const editando = !!materialEditandoId;
   const boton = document.getElementById('btn-guardar-material');
   boton.disabled = true;
   boton.textContent = 'Guardando...';
@@ -278,32 +285,37 @@ async function guardarMaterial() {
     let urlArchivo = null;
 
     if (tipo === 'documento') {
-      if (!archivoSeleccionado) throw new Error('Debes seleccionar un archivo.');
+      if (archivoSeleccionado) {
+        const archivoAsubir = await comprimirImagen(archivoSeleccionado);
+        const nombreLimpio = archivoAsubir.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const rutaArchivo = `${fichaId}/${Date.now()}_${nombreLimpio}`;
 
-      const archivoAsubir = await comprimirImagen(archivoSeleccionado);
-      const nombreLimpio = archivoAsubir.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-      const rutaArchivo = `${fichaId}/${Date.now()}_${nombreLimpio}`;
+        const { error: errorSubida } = await supabaseClient
+          .storage
+          .from('material-formacion')
+          .upload(rutaArchivo, archivoAsubir);
 
-      const { error: errorSubida } = await supabaseClient
-        .storage
-        .from('material-formacion')
-        .upload(rutaArchivo, archivoAsubir);
+        if (errorSubida) throw new Error('Error al subir el archivo: ' + errorSubida.message);
 
-      if (errorSubida) throw new Error('Error al subir el archivo: ' + errorSubida.message);
+        const { data: urlPublica } = supabaseClient
+          .storage
+          .from('material-formacion')
+          .getPublicUrl(rutaArchivo);
 
-      const { data: urlPublica } = supabaseClient
-        .storage
-        .from('material-formacion')
-        .getPublicUrl(rutaArchivo);
-
-      urlArchivo = urlPublica.publicUrl;
+        urlArchivo = urlPublica.publicUrl;
+      } else if (editando && materialEditandoUrlActual) {
+        // No se subió archivo nuevo: conservar el archivo ya existente
+        urlArchivo = materialEditandoUrlActual;
+      } else {
+        throw new Error('Debes seleccionar un archivo.');
+      }
     } else {
       const url = document.getElementById('url-material').value.trim();
       if (!url) throw new Error('Debes ingresar una URL.');
       urlArchivo = url;
     }
 
-    const { error: errorInsert } = await supabaseClient.from('material_formacion').insert({
+    const datosMaterial = {
       ficha_id: fichaId,
       competencia_id: competenciaId,
       resultados_ra: resultadosSeleccionados,
@@ -312,19 +324,26 @@ async function guardarMaterial() {
       semana: semana ? parseInt(semana) : null,
       url_archivo: urlArchivo,
       descripcion: descripcion || null,
-    });
+    };
 
-    if (errorInsert) throw new Error(errorInsert.message);
+    if (editando) {
+      const { error: errorUpdate } = await supabaseClient.from('material_formacion').update(datosMaterial).eq('id', materialEditandoId);
+      if (errorUpdate) throw new Error(errorUpdate.message);
+      mostrarExito('Material actualizado correctamente.');
+    } else {
+      const { error: errorInsert } = await supabaseClient.from('material_formacion').insert(datosMaterial);
+      if (errorInsert) throw new Error(errorInsert.message);
+      mostrarExito('Material agregado correctamente.');
+    }
 
-    mostrarExito('Material agregado correctamente.');
-    limpiarFormulario();
+    cancelarEdicion();
     await cargarListaMaterial(fichaId);
 
   } catch (err) {
     mostrarError(err.message);
   } finally {
     boton.disabled = false;
-    boton.textContent = '+ Agregar material';
+    boton.textContent = materialEditandoId ? 'Guardar cambios' : '+ Agregar material';
   }
 }
 
@@ -335,6 +354,56 @@ function limpiarFormulario() {
   archivoSeleccionado = null;
   inputArchivo.value = '';
   document.getElementById('texto-zona-carga').innerHTML = `<strong>Haz clic para subir</strong> o arrastra el archivo aquí`;
+  document.getElementById('archivo-actual-texto').classList.add('oculto');
+}
+
+async function editarMaterial(id) {
+  ocultarMensajes();
+  const { data: material, error } = await supabaseClient
+    .from('material_formacion')
+    .select('id, titulo, tipo, url_archivo, descripcion, semana, competencia_id, resultados_ra')
+    .eq('id', id)
+    .single();
+
+  if (error || !material) {
+    mostrarError('No se pudo cargar el material para editar.');
+    return;
+  }
+
+  materialEditandoId = material.id;
+  materialEditandoUrlActual = material.url_archivo;
+
+  document.getElementById('titulo-material').value = material.titulo || '';
+  document.getElementById('tipo-material').value = material.tipo;
+  document.getElementById('select-semana').value = material.semana ? String(material.semana) : '';
+  document.getElementById('descripcion-material').value = material.descripcion || '';
+  alCambiarTipo();
+
+  if (material.tipo === 'documento') {
+    document.getElementById('archivo-actual-texto').textContent = '📎 Archivo actual conservado (sube uno nuevo solo si quieres reemplazarlo)';
+    document.getElementById('archivo-actual-texto').classList.remove('oculto');
+  } else {
+    document.getElementById('url-material').value = material.url_archivo || '';
+  }
+
+  document.getElementById('select-competencia-material').value = material.competencia_id || '';
+  await cargarResultadosMaterial(material.resultados_ra || []);
+
+  document.getElementById('titulo-formulario').textContent = 'Editar material';
+  const boton = document.getElementById('btn-guardar-material');
+  boton.textContent = 'Guardar cambios';
+  document.getElementById('btn-cancelar-edicion').classList.remove('oculto');
+
+  document.querySelector('.contenedor').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelarEdicion() {
+  materialEditandoId = null;
+  materialEditandoUrlActual = null;
+  document.getElementById('titulo-formulario').textContent = 'Agregar material';
+  document.getElementById('btn-guardar-material').textContent = '+ Agregar material';
+  document.getElementById('btn-cancelar-edicion').classList.add('oculto');
+  limpiarFormulario();
 }
 
 async function cargarListaMaterial(fichaId) {
@@ -389,7 +458,10 @@ async function cargarListaMaterial(fichaId) {
                 · ${new Date(m.created_at).toLocaleDateString('es-CO')}
               </div>
             </div>
-            <button class="btn btn-secundario" style="font-size:0.75rem; padding:5px 10px;" onclick="eliminarMaterial('${m.id}')">Eliminar</button>
+            <div style="display:flex; gap:8px; flex-shrink:0;">
+              <button class="btn btn-secundario" style="font-size:0.75rem; padding:5px 10px;" onclick="editarMaterial('${m.id}')">Editar</button>
+              <button class="btn btn-secundario" style="font-size:0.75rem; padding:5px 10px;" onclick="eliminarMaterial('${m.id}')">Eliminar</button>
+            </div>
           </div>
         `).join('')}
       </div>
