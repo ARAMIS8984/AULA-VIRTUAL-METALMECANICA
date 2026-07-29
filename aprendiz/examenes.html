@@ -64,21 +64,25 @@ async function cargarActividades() {
   if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
   if (!actividades || actividades.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Tu instructor aún no ha programado exámenes ni actividades.</p>'; return; }
 
-  const hoy = new Date().toISOString().split('T')[0];
+  const ahora = new Date();
 
   cont.innerHTML = actividades.map(a => {
     let estadoTexto = 'Próximamente';
     let estadoClase = 'etiqueta-gris';
     let disponible = false;
-    if (a.fecha_fin && hoy > a.fecha_fin) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
-    else if (a.fecha_inicio && hoy >= a.fecha_inicio) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; disponible = true; }
+    if (a.fecha_fin && ahora > new Date(a.fecha_fin)) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
+    else if (a.fecha_inicio && ahora >= new Date(a.fecha_inicio)) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; disponible = true; }
+    const esDocumento = a.modalidad === 'entrega_documento';
+    const badgeModalidad = esDocumento ? '📎 Entrega de documento' : '📝 Examen en línea';
+    const enlace = esDocumento ? `entregar-documento.html?id=${a.id}` : `presentar-examen.html?id=${a.id}`;
+    const textoBoton = esDocumento ? 'Entregar documento' : 'Presentar ahora';
 
     return `
       <div class="actividad-tarjeta ${disponible ? 'disponible' : ''}">
         <div class="actividad-titulo">${a.titulo} <span class="etiqueta ${estadoClase}">${estadoTexto}</span></div>
-        <div class="actividad-fechas">Del ${formatearFecha(a.fecha_inicio)} al ${formatearFecha(a.fecha_fin)}${a.tiempo_limite_minutos ? ` · ${a.tiempo_limite_minutos} min` : ''}</div>
+        <div class="actividad-fechas">${badgeModalidad} · Del ${formatearFecha(a.fecha_inicio)} al ${formatearFecha(a.fecha_fin)}${a.tiempo_limite_minutos ? ` · ${a.tiempo_limite_minutos} min` : ''}</div>
         ${a.descripcion ? `<div class="actividad-desc">${a.descripcion}</div>` : ''}
-        ${disponible ? `<a href="presentar-examen.html?id=${a.id}" class="btn btn-primario" style="margin-top:10px; display:inline-block; text-decoration:none;">Presentar ahora</a>` : ''}
+        ${disponible ? `<a href="${enlace}" class="btn btn-primario" style="margin-top:10px; display:inline-block; text-decoration:none;">${textoBoton}</a>` : ''}
       </div>
     `;
   }).join('');
@@ -86,7 +90,7 @@ async function cargarActividades() {
 
 function formatearFecha(fecha) {
   if (!fecha) return '—';
-  return new Date(fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(fecha).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 inicializar();

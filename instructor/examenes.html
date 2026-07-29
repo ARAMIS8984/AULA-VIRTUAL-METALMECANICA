@@ -54,17 +54,24 @@
     <input type="hidden" id="id-actividad-editando" value="">
     <input type="text" id="titulo-actividad" placeholder="Título (ej: Examen Torneado CNC - Corte 1)">
     <textarea id="descripcion-actividad" rows="2" placeholder="Instrucciones o descripción (opcional)"></textarea>
+    <div class="campo" style="margin-bottom:0;">
+      <label for="modalidad-actividad">Modalidad</label>
+      <select id="modalidad-actividad" onchange="alCambiarModalidad()">
+        <option value="examen_online">📝 Examen en línea (preguntas con puntos)</option>
+        <option value="entrega_documento">📎 Entrega de documento (el aprendiz sube un archivo, tú calificas)</option>
+      </select>
+    </div>
     <div class="grid-2">
       <div class="campo" style="margin-bottom:0;">
         <label for="fecha-inicio-actividad">Disponible desde</label>
-        <input type="date" id="fecha-inicio-actividad">
+        <input type="datetime-local" id="fecha-inicio-actividad">
       </div>
       <div class="campo" style="margin-bottom:0;">
         <label for="fecha-fin-actividad">Disponible hasta</label>
-        <input type="date" id="fecha-fin-actividad">
+        <input type="datetime-local" id="fecha-fin-actividad">
       </div>
     </div>
-    <div class="campo" style="margin-bottom:0;">
+    <div class="campo" style="margin-bottom:0;" id="bloque-tiempo-limite">
       <label for="tiempo-limite-actividad">Tiempo límite en minutos (opcional, solo si aplica)</label>
       <input type="number" id="tiempo-limite-actividad" min="1" placeholder="Ej: 60">
     </div>
@@ -84,6 +91,11 @@
 requerirSesionInstructor();
 
 let actividadesCache = {};
+
+function alCambiarModalidad() {
+  const modalidad = document.getElementById('modalidad-actividad').value;
+  document.getElementById('bloque-tiempo-limite').style.display = modalidad === 'entrega_documento' ? 'none' : '';
+}
 
 async function cargarFichas() {
   const { data: fichas, error } = await supabaseClient
@@ -118,22 +130,24 @@ async function guardarActividad() {
   const idEditando = document.getElementById('id-actividad-editando').value;
   const titulo = document.getElementById('titulo-actividad').value.trim();
   const descripcion = document.getElementById('descripcion-actividad').value.trim();
-  const fechaInicio = document.getElementById('fecha-inicio-actividad').value;
-  const fechaFin = document.getElementById('fecha-fin-actividad').value;
+  const modalidad = document.getElementById('modalidad-actividad').value;
+  const fechaInicioLocal = document.getElementById('fecha-inicio-actividad').value;
+  const fechaFinLocal = document.getElementById('fecha-fin-actividad').value;
   const tiempoLimite = document.getElementById('tiempo-limite-actividad').value;
 
   if (!fichaId) { mostrarError('Selecciona una ficha.'); return; }
   if (!titulo) { mostrarError('El título es obligatorio.'); return; }
-  if (!fechaInicio || !fechaFin) { mostrarError('Debes indicar la fecha de inicio y de fin.'); return; }
-  if (fechaFin < fechaInicio) { mostrarError('La fecha de fin no puede ser antes que la de inicio.'); return; }
+  if (!fechaInicioLocal || !fechaFinLocal) { mostrarError('Debes indicar la fecha y hora de inicio y de fin.'); return; }
+  if (fechaFinLocal < fechaInicioLocal) { mostrarError('La fecha de fin no puede ser antes que la de inicio.'); return; }
 
   const datos = {
     ficha_id: fichaId,
     titulo,
     descripcion: descripcion || null,
-    fecha_inicio: fechaInicio,
-    fecha_fin: fechaFin,
-    tiempo_limite_minutos: tiempoLimite ? parseInt(tiempoLimite) : null,
+    modalidad,
+    fecha_inicio: new Date(fechaInicioLocal).toISOString(),
+    fecha_fin: new Date(fechaFinLocal).toISOString(),
+    tiempo_limite_minutos: (modalidad === 'examen_online' && tiempoLimite) ? parseInt(tiempoLimite) : null,
   };
 
   const { error } = idEditando
@@ -147,13 +161,23 @@ async function guardarActividad() {
   cargarActividades(fichaId);
 }
 
+// Convierte un ISO timestamp (de la BD) al formato que necesita <input type="datetime-local">
+function isoADatetimeLocal(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function editarActividad(a) {
   document.getElementById('id-actividad-editando').value = a.id;
   document.getElementById('titulo-actividad').value = a.titulo;
   document.getElementById('descripcion-actividad').value = a.descripcion || '';
-  document.getElementById('fecha-inicio-actividad').value = a.fecha_inicio || '';
-  document.getElementById('fecha-fin-actividad').value = a.fecha_fin || '';
+  document.getElementById('modalidad-actividad').value = a.modalidad || 'examen_online';
+  document.getElementById('fecha-inicio-actividad').value = isoADatetimeLocal(a.fecha_inicio);
+  document.getElementById('fecha-fin-actividad').value = isoADatetimeLocal(a.fecha_fin);
   document.getElementById('tiempo-limite-actividad').value = a.tiempo_limite_minutos || '';
+  alCambiarModalidad();
 
   document.getElementById('titulo-formulario').textContent = 'Editando actividad';
   document.getElementById('btn-guardar-actividad').textContent = 'Guardar cambios';
@@ -165,9 +189,11 @@ function cancelarEdicion() {
   document.getElementById('id-actividad-editando').value = '';
   document.getElementById('titulo-actividad').value = '';
   document.getElementById('descripcion-actividad').value = '';
+  document.getElementById('modalidad-actividad').value = 'examen_online';
   document.getElementById('fecha-inicio-actividad').value = '';
   document.getElementById('fecha-fin-actividad').value = '';
   document.getElementById('tiempo-limite-actividad').value = '';
+  alCambiarModalidad();
 
   document.getElementById('titulo-formulario').textContent = 'Programar nuevo examen/actividad';
   document.getElementById('btn-guardar-actividad').textContent = '+ Programar';
@@ -185,21 +211,22 @@ async function cargarActividades(fichaId) {
   if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
   if (!actividades || actividades.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Aún no has programado ninguna actividad para esta ficha.</p>'; return; }
 
-  const hoy = new Date().toISOString().split('T')[0];
+  const ahora = new Date();
   actividadesCache = {};
 
   cont.innerHTML = actividades.map(a => {
     actividadesCache[a.id] = a;
     let estadoTexto = 'Próximamente';
     let estadoClase = 'etiqueta-gris';
-    if (a.fecha_fin && hoy > a.fecha_fin) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
-    else if (a.fecha_inicio && hoy >= a.fecha_inicio) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; }
+    if (a.fecha_fin && ahora > new Date(a.fecha_fin)) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
+    else if (a.fecha_inicio && ahora >= new Date(a.fecha_inicio)) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; }
+    const badgeModalidad = a.modalidad === 'entrega_documento' ? '📎 Entrega de documento' : '📝 Examen en línea';
 
     return `
       <div class="actividad-tarjeta">
         <div>
           <div class="actividad-titulo">${a.titulo} <span class="etiqueta ${estadoClase}">${estadoTexto}</span></div>
-          <div class="actividad-fechas">Del ${formatearFecha(a.fecha_inicio)} al ${formatearFecha(a.fecha_fin)}${a.tiempo_limite_minutos ? ` · ${a.tiempo_limite_minutos} min` : ''}</div>
+          <div class="actividad-fechas">${badgeModalidad} · Del ${formatearFecha(a.fecha_inicio)} al ${formatearFecha(a.fecha_fin)}${a.tiempo_limite_minutos ? ` · ${a.tiempo_limite_minutos} min` : ''}</div>
           ${a.descripcion ? `<div class="actividad-desc">${a.descripcion}</div>` : ''}
           <div style="display:flex; gap:10px; margin-top:8px;">
             <button class="btn btn-secundario" style="font-size:0.75rem; padding:5px 10px;" onclick="editarActividad(actividadesCache['${a.id}'])">Editar</button>
@@ -221,6 +248,9 @@ async function verResultados(examenId) {
   cont.classList.remove('oculto');
   cont.innerHTML = '<p class="texto-ayuda">Cargando resultados...</p>';
 
+  const actividad = actividadesCache[examenId];
+  const esDocumento = actividad?.modalidad === 'entrega_documento';
+
   const { data: resultados, error } = await supabaseClient
     .from('resultados_examen')
     .select('*, aprendices(nombre_completo)')
@@ -228,7 +258,7 @@ async function verResultados(examenId) {
     .order('fecha_presentacion', { ascending: false });
 
   if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
-  if (!resultados || resultados.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Nadie ha presentado este examen todavía.</p>'; return; }
+  if (!resultados || resultados.length === 0) { cont.innerHTML = `<p class="texto-ayuda">Nadie ha ${esDocumento ? 'entregado' : 'presentado'} esta actividad todavía.</p>`; return; }
 
   cont.innerHTML = resultados.map(r => `
     <div class="tarjeta espaciado-v" style="margin-bottom:8px;">
@@ -236,15 +266,21 @@ async function verResultados(examenId) {
         <strong>${r.aprendices?.nombre_completo || 'Aprendiz'}</strong>
         <span class="etiqueta ${r.revisado ? 'etiqueta-verde' : 'etiqueta-gris'}">${r.revisado ? `Nota: ${r.puntaje_obtenido}` : 'Pendiente de revisión'}</span>
       </div>
-      ${(r.respuestas || []).map(resp => `
+      ${esDocumento ? `
+        <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
+          ${r.url_documento ? `<a href="${r.url_documento}" target="_blank" rel="noopener">📎 Ver documento entregado</a>` : '<em>Sin documento</em>'}
+        </div>
+      ` : (r.respuestas || []).map(resp => `
         <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
           <p style="margin:0 0 2px; color:var(--gris-texto);">${resp.enunciado}</p>
           <p style="margin:0;">${resp.respuesta || '<em>Sin responder</em>'} ${resp.tipo === 'opcion_multiple' ? (resp.correcta ? '✅' : '❌') : ''}</p>
         </div>
       `).join('')}
+      ${r.comentario_instructor ? `<p style="margin:8px 0 0; font-size:0.82rem; color:var(--gris-texto);"><strong>Tu comentario:</strong> ${r.comentario_instructor}</p>` : ''}
       ${!r.revisado ? `
-        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
           <input type="number" id="nota-manual-${r.id}" min="0" max="100" placeholder="Nota 0-100" style="width:110px;">
+          <input type="text" id="comentario-manual-${r.id}" placeholder="Comentario (opcional)" style="flex:1; min-width:160px;">
           <button class="btn btn-primario" style="font-size:0.8rem; padding:6px 12px;" onclick="guardarNotaManual('${r.id}', '${examenId}')">Guardar nota final</button>
         </div>
       ` : ''}
@@ -254,15 +290,16 @@ async function verResultados(examenId) {
 
 async function guardarNotaManual(resultadoId, examenId) {
   const nota = document.getElementById(`nota-manual-${resultadoId}`).value;
+  const comentario = document.getElementById(`comentario-manual-${resultadoId}`)?.value.trim() || null;
   if (nota === '') { alert('Escribe una nota.'); return; }
-  const { error } = await supabaseClient.from('resultados_examen').update({ puntaje_obtenido: parseFloat(nota), revisado: true }).eq('id', resultadoId);
+  const { error } = await supabaseClient.from('resultados_examen').update({ puntaje_obtenido: parseFloat(nota), revisado: true, comentario_instructor: comentario }).eq('id', resultadoId);
   if (error) { alert('Error: ' + error.message); return; }
   verResultados(examenId);
 }
 
 function formatearFecha(fecha) {
   if (!fecha) return '—';
-  return new Date(fecha + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(fecha).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 async function eliminarActividad(id) {

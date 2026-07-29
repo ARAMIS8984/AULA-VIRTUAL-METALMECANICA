@@ -57,12 +57,12 @@ async function inicializar() {
     return;
   }
 
-  const hoy = new Date().toISOString().split('T')[0];
-  if (examen.fecha_inicio && hoy < examen.fecha_inicio) {
+  const ahora = new Date();
+  if (examen.fecha_inicio && ahora < new Date(examen.fecha_inicio)) {
     document.getElementById('contenido').innerHTML = '<p class="texto-ayuda">Este examen todavía no está disponible.</p>';
     return;
   }
-  if (examen.fecha_fin && hoy > examen.fecha_fin) {
+  if (examen.fecha_fin && ahora > new Date(examen.fecha_fin)) {
     document.getElementById('contenido').innerHTML = '<p class="texto-ayuda">El plazo para presentar este examen ya cerró.</p>';
     return;
   }
