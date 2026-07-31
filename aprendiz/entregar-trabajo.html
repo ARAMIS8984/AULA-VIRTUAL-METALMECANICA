@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entregar trabajo - AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .miniatura-foto { position:relative; width:76px; height:76px; }
+  .miniatura-foto img { width:100%; height:100%; object-fit:cover; border-radius:8px; border:1px solid var(--gris-borde); }
+  .miniatura-foto button {
+    position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%;
+    background:var(--rojo-error); color:#fff; border:none; cursor:pointer; font-size:0.7rem; line-height:1;
+  }
+</style>
+</head>
+<body>
+
+<div class="contenedor" style="padding-top:24px; padding-bottom:48px; max-width:640px;">
+  <div id="contenido">
+    <p class="texto-ayuda">Cargando actividad...</p>
+  </div>
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/image-utils.js"></script>
+<script>
+const sesion = requerirSesionAprendiz();
+const parametros = new URLSearchParams(window.location.search);
+const examenId = parametros.get('id');
+const MAX_FOTOS = 5;
+let fotosSeleccionadas = [];
+
+async function inicializar() {
+  if (!sesion || !examenId) { window.location.href = 'examenes.html'; return; }
+
+  const { data: actividad, error: errorActividad } = await supabaseClient
+    .from('examenes')
+    .select('*')
+    .eq('id', examenId)
+    .single();
+
+  if (errorActividad || !actividad) {
+    document.getElementById('contenido').innerHTML = '<p style="color:var(--rojo-error);">No se encontró esta actividad.</p>';
+    return;
+  }
+
+  const ahora = new Date();
+  if (actividad.fecha_inicio && ahora < new Date(actividad.fecha_inicio)) {
+    document.getElementById('contenido').innerHTML = '<p class="texto-ayuda">Esta actividad todavía no está disponible.</p>';
+    return;
+  }
+  if (actividad.fecha_fin && ahora > new Date(actividad.fecha_fin)) {
+    document.getElementById('contenido').innerHTML = '<p class="texto-ayuda">El plazo para entregar esta actividad ya cerró.</p>';
+    return;
+  }
+
+  const { data: yaEntregado } = await supabaseClient
+    .from('resultados_examen')
+    .select('id, texto_respuesta, fotos_urls, puntaje_obtenido, revisado, comentario_instructor')
+    .eq('examen_id', examenId)
+    .eq('aprendiz_id', sesion.id)
+    .maybeSingle();
+
+  if (yaEntregado) {
+    document.getElementById('contenido').innerHTML = `
+      <div class="tarjeta" style="text-align:center;">
+        <h3>Ya entregaste esta actividad</h3>
+        <p style="white-space:pre-wrap; text-align:left; font-size:0.9rem; margin:10px 0;">${yaEntregado.texto_respuesta || ''}</p>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:10px;">
+          ${(yaEntregado.fotos_urls || []).map(url => `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" loading="lazy" style="width:76px; height:76px; object-fit:cover; border-radius:8px; border:1px solid var(--gris-borde);"></a>`).join('')}
+        </div>
+        <p class="texto-ayuda">${yaEntregado.revisado
+            ? `Tu nota: <strong>${yaEntregado.puntaje_obtenido}</strong>`
+            : 'Tu instructor aún no ha revisado tu entrega.'}</p>
+        ${yaEntregado.comentario_instructor ? `<p class="texto-ayuda" style="margin-top:6px;"><strong>Comentario:</strong> ${yaEntregado.comentario_instructor}</p>` : ''}
+        <a href="examenes.html" class="btn btn-secundario" style="margin-top:14px; display:inline-block;">Volver</a>
+      </div>
+    `;
+    return;
+  }
+
+  document.getElementById('contenido').innerHTML = `
+    <div class="tarjeta espaciado-v">
+      <h3 style="margin-bottom:4px;">${actividad.titulo}</h3>
+      ${actividad.descripcion ? `<p class="texto-ayuda" style="margin-top:0;">${actividad.descripcion}</p>` : ''}
+      <p class="texto-ayuda" style="margin-top:0;">Fecha límite: <strong>${formatearFecha(actividad.fecha_fin)}</strong></p>
+
+      <div class="campo" style="margin-bottom:0;">
+        <label for="texto-trabajo">Cuéntanos qué hiciste</label>
+        <textarea id="texto-trabajo" rows="6" placeholder="Escribe aquí todo lo que realizaste en la actividad..."></textarea>
+      </div>
+
+      <div class="campo" style="margin-bottom:0;">
+        <label>Fotos de tu trabajo (hasta ${MAX_FOTOS})</label>
+        <p style="font-size:0.8rem; color:var(--rojo-error); margin:0 0 6px;">⚠ Una vez entregado no podrás cambiar el texto ni las fotos.</p>
+        <div class="zona-carga" id="zona-carga" onclick="document.getElementById('input-fotos').click()">
+          <div class="icono">📷</div>
+          <p id="texto-zona-carga"><strong>Haz clic para subir fotos</strong> o arrastra aquí</p>
+        </div>
+        <input type="file" id="input-fotos" class="oculto" accept="image/*" multiple>
+        <div id="miniaturas" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;"></div>
+      </div>
+
+      <div class="mensaje-error" id="mensaje-error"></div>
+
+      <button class="btn btn-primario" id="btn-entregar" style="width:100%; margin-top:14px;" onclick="entregarTrabajo()">Entregar</button>
+      <a href="examenes.html" class="btn btn-secundario" style="width:100%; margin-top:8px; display:block; text-align:center; box-sizing:border-box;">Cancelar</a>
+    </div>
+  `;
+
+  const inputFotos = document.getElementById('input-fotos');
+  const zonaCarga = document.getElementById('zona-carga');
+
+  inputFotos.addEventListener('change', (e) => agregarFotos(Array.from(e.target.files || [])));
+  zonaCarga.addEventListener('dragover', (e) => { e.preventDefault(); zonaCarga.classList.add('arrastrando'); });
+  zonaCarga.addEventListener('dragleave', () => zonaCarga.classList.remove('arrastrando'));
+  zonaCarga.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zonaCarga.classList.remove('arrastrando');
+    agregarFotos(Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/')));
+  });
+}
+
+function agregarFotos(archivos) {
+  const errorCont = document.getElementById('mensaje-error');
+  errorCont.style.display = 'none';
+
+  for (const archivo of archivos) {
+    if (fotosSeleccionadas.length >= MAX_FOTOS) {
+      errorCont.textContent = `Solo puedes subir hasta ${MAX_FOTOS} fotos.`;
+      errorCont.style.display = 'block';
+      break;
+    }
+    fotosSeleccionadas.push(archivo);
+  }
+  document.getElementById('input-fotos').value = '';
+  renderizarMiniaturas();
+}
+
+function quitarFoto(indice) {
+  fotosSeleccionadas.splice(indice, 1);
+  renderizarMiniaturas();
+}
+
+function renderizarMiniaturas() {
+  const cont = document.getElementById('miniaturas');
+  cont.innerHTML = fotosSeleccionadas.map((archivo, i) => `
+    <div class="miniatura-foto">
+      <img src="${URL.createObjectURL(archivo)}">
+      <button onclick="quitarFoto(${i})" title="Quitar">✕</button>
+    </div>
+  `).join('');
+}
+
+async function entregarTrabajo() {
+  const errorCont = document.getElementById('mensaje-error');
+  errorCont.textContent = '';
+  errorCont.style.display = 'none';
+
+  const texto = document.getElementById('texto-trabajo').value.trim();
+  if (!texto) {
+    errorCont.textContent = 'Debes escribir qué hiciste en la actividad.';
+    errorCont.style.display = 'block';
+    return;
+  }
+  if (fotosSeleccionadas.length === 0) {
+    errorCont.textContent = 'Debes subir al menos una foto.';
+    errorCont.style.display = 'block';
+    return;
+  }
+
+  if (!confirm('¿Entregar este trabajo? No podrás modificarlo después.')) return;
+
+  const boton = document.getElementById('btn-entregar');
+  boton.disabled = true;
+  boton.textContent = 'Comprimiendo y subiendo fotos...';
+
+  try {
+    const urlsSubidas = [];
+    for (let i = 0; i < fotosSeleccionadas.length; i++) {
+      const archivoComprimido = await comprimirImagen(fotosSeleccionadas[i]);
+      const nombreLimpio = archivoComprimido.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+      const ruta = `${examenId}/${sesion.id}_${Date.now()}_${i}_${nombreLimpio}`;
+
+      const { error: errorSubida } = await supabaseClient
+        .storage
+        .from('entregas-documento')
+        .upload(ruta, archivoComprimido);
+
+      if (errorSubida) throw new Error('Error al subir una foto: ' + errorSubida.message);
+
+      const { data: urlPublica } = supabaseClient.storage.from('entregas-documento').getPublicUrl(ruta);
+      urlsSubidas.push(urlPublica.publicUrl);
+    }
+
+    const { error: errorInsert } = await supabaseClient.from('resultados_examen').insert({
+      examen_id: examenId,
+      aprendiz_id: sesion.id,
+      texto_respuesta: texto,
+      fotos_urls: urlsSubidas,
+      revisado: false,
+    });
+
+    if (errorInsert) throw new Error(errorInsert.message);
+
+    inicializar();
+
+  } catch (err) {
+    errorCont.textContent = err.message;
+    errorCont.style.display = 'block';
+    boton.disabled = false;
+    boton.textContent = 'Entregar';
+  }
+}
+
+function formatearFecha(fecha) {
+  if (!fecha) return '—';
+  return new Date(fecha).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+inicializar();
+</script>
+</body>
+</html>

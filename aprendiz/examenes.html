@@ -73,9 +73,10 @@ async function cargarActividades() {
     if (a.fecha_fin && ahora > new Date(a.fecha_fin)) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
     else if (a.fecha_inicio && ahora >= new Date(a.fecha_inicio)) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; disponible = true; }
     const esDocumento = a.modalidad === 'entrega_documento';
-    const badgeModalidad = esDocumento ? '📎 Entrega de documento' : '📝 Examen en línea';
-    const enlace = esDocumento ? `entregar-documento.html?id=${a.id}` : `presentar-examen.html?id=${a.id}`;
-    const textoBoton = esDocumento ? 'Entregar documento' : 'Presentar ahora';
+    const esTextoFotos = a.modalidad === 'texto_fotos';
+    const badgeModalidad = esDocumento ? '📎 Entrega de documento' : esTextoFotos ? '✍️ Trabajo escrito + fotos' : '📝 Examen en línea';
+    const enlace = esDocumento ? `entregar-documento.html?id=${a.id}` : esTextoFotos ? `entregar-trabajo.html?id=${a.id}` : `presentar-examen.html?id=${a.id}`;
+    const textoBoton = esDocumento ? 'Entregar documento' : esTextoFotos ? 'Entregar trabajo' : 'Presentar ahora';
 
     return `
       <div class="actividad-tarjeta ${disponible ? 'disponible' : ''}">

@@ -59,6 +59,7 @@
       <select id="modalidad-actividad" onchange="alCambiarModalidad()">
         <option value="examen_online">📝 Examen en línea (preguntas con puntos)</option>
         <option value="entrega_documento">📎 Entrega de documento (el aprendiz sube un archivo, tú calificas)</option>
+        <option value="texto_fotos">✍️ Trabajo escrito + fotos (el aprendiz escribe y sube fotos de lo que hizo)</option>
       </select>
     </div>
     <div class="grid-2">
@@ -94,7 +95,7 @@ let actividadesCache = {};
 
 function alCambiarModalidad() {
   const modalidad = document.getElementById('modalidad-actividad').value;
-  document.getElementById('bloque-tiempo-limite').style.display = modalidad === 'entrega_documento' ? 'none' : '';
+  document.getElementById('bloque-tiempo-limite').style.display = modalidad === 'examen_online' ? '' : 'none';
 }
 
 async function cargarFichas() {
@@ -220,7 +221,7 @@ async function cargarActividades(fichaId) {
     let estadoClase = 'etiqueta-gris';
     if (a.fecha_fin && ahora > new Date(a.fecha_fin)) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
     else if (a.fecha_inicio && ahora >= new Date(a.fecha_inicio)) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; }
-    const badgeModalidad = a.modalidad === 'entrega_documento' ? '📎 Entrega de documento' : '📝 Examen en línea';
+    const badgeModalidad = a.modalidad === 'entrega_documento' ? '📎 Entrega de documento' : a.modalidad === 'texto_fotos' ? '✍️ Trabajo escrito + fotos' : '📝 Examen en línea';
 
     return `
       <div class="actividad-tarjeta">
@@ -250,6 +251,7 @@ async function verResultados(examenId) {
 
   const actividad = actividadesCache[examenId];
   const esDocumento = actividad?.modalidad === 'entrega_documento';
+  const esTextoFotos = actividad?.modalidad === 'texto_fotos';
 
   const { data: resultados, error } = await supabaseClient
     .from('resultados_examen')
@@ -258,7 +260,7 @@ async function verResultados(examenId) {
     .order('fecha_presentacion', { ascending: false });
 
   if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
-  if (!resultados || resultados.length === 0) { cont.innerHTML = `<p class="texto-ayuda">Nadie ha ${esDocumento ? 'entregado' : 'presentado'} esta actividad todavía.</p>`; return; }
+  if (!resultados || resultados.length === 0) { cont.innerHTML = `<p class="texto-ayuda">Nadie ha ${(esDocumento || esTextoFotos) ? 'entregado' : 'presentado'} esta actividad todavía.</p>`; return; }
 
   cont.innerHTML = resultados.map(r => `
     <div class="tarjeta espaciado-v" style="margin-bottom:8px;">
@@ -269,6 +271,13 @@ async function verResultados(examenId) {
       ${esDocumento ? `
         <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
           ${r.url_documento ? `<a href="${r.url_documento}" target="_blank" rel="noopener">📎 Ver documento entregado</a>` : '<em>Sin documento</em>'}
+        </div>
+      ` : esTextoFotos ? `
+        <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
+          <p style="margin:0 0 8px; white-space:pre-wrap;">${r.texto_respuesta || '<em>Sin texto</em>'}</p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            ${(r.fotos_urls || []).map(url => `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" loading="lazy" style="width:70px; height:70px; object-fit:cover; border-radius:6px; border:1px solid var(--gris-borde);"></a>`).join('')}
+          </div>
         </div>
       ` : (r.respuestas || []).map(resp => `
         <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
