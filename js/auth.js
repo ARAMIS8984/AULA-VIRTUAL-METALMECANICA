@@ -86,7 +86,7 @@ async function iniciarSesionAprendiz(evento) {
   }
 
   // Guardar sesión simple de aprendiz (no usa Supabase Auth)
-  sessionStorage.setItem('aulasena_aprendiz', JSON.stringify({
+  localStorage.setItem('aulasena_aprendiz', JSON.stringify({
     id: aprendiz.id,
     nombre: aprendiz.nombre_completo,
     ficha_id: ficha.id,
@@ -110,7 +110,7 @@ async function requerirSesionInstructor() {
 
 // Llamar al cargar cualquier página del aprendiz
 function requerirSesionAprendiz() {
-  const datos = sessionStorage.getItem('aulasena_aprendiz');
+  const datos = localStorage.getItem('aulasena_aprendiz');
   if (!datos) {
     window.location.href = '../index.html';
     return null;
@@ -124,6 +124,6 @@ async function cerrarSesionInstructor() {
 }
 
 function cerrarSesionAprendiz() {
-  sessionStorage.removeItem('aulasena_aprendiz');
+  localStorage.removeItem('aulasena_aprendiz');
   window.location.href = '../index.html';
 }
