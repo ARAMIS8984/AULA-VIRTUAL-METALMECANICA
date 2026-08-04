@@ -65,6 +65,14 @@ async function cargarActividades() {
   if (!actividades || actividades.length === 0) { cont.innerHTML = '<p class="texto-ayuda">Tu instructor aún no ha programado exámenes ni actividades.</p>'; return; }
 
   const ahora = new Date();
+  const idsActividades = actividades.map(a => a.id);
+  const { data: misResultados } = await supabaseClient
+    .from('resultados_examen')
+    .select('examen_id, puntaje_obtenido, no_presentado, revisado, comentario_instructor')
+    .eq('aprendiz_id', sesion.id)
+    .in('examen_id', idsActividades);
+  const mapaMisResultados = {};
+  (misResultados || []).forEach(r => { mapaMisResultados[r.examen_id] = r; });
 
   cont.innerHTML = actividades.map(a => {
     let estadoTexto = 'Próximamente';
@@ -74,16 +82,30 @@ async function cargarActividades() {
     else if (a.fecha_inicio && ahora >= new Date(a.fecha_inicio)) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; disponible = true; }
     const esDocumento = a.modalidad === 'entrega_documento';
     const esTextoFotos = a.modalidad === 'texto_fotos';
-    const badgeModalidad = esDocumento ? '📎 Entrega de documento' : esTextoFotos ? '✍️ Trabajo escrito + fotos' : '📝 Examen en línea';
+    const esParticipacion = a.modalidad === 'participacion';
+    const badgeModalidad = esDocumento ? '📎 Entrega de documento' : esTextoFotos ? '✍️ Trabajo escrito + fotos' : esParticipacion ? '🗣️ Participación / evaluación directa' : '📝 Examen en línea';
     const enlace = esDocumento ? `entregar-documento.html?id=${a.id}` : esTextoFotos ? `entregar-trabajo.html?id=${a.id}` : `presentar-examen.html?id=${a.id}`;
     const textoBoton = esDocumento ? 'Entregar documento' : esTextoFotos ? 'Entregar trabajo' : 'Presentar ahora';
+
+    let bloqueParticipacion = '';
+    if (esParticipacion) {
+      const r = mapaMisResultados[a.id];
+      if (r?.no_presentado) {
+        bloqueParticipacion = `<p class="texto-ayuda" style="margin-top:8px; color:var(--rojo-error);">No presentado</p>`;
+      } else if (r?.revisado) {
+        bloqueParticipacion = `<p class="texto-ayuda" style="margin-top:8px;">Tu nota: <strong>${r.puntaje_obtenido}</strong></p>`;
+        if (r.comentario_instructor) bloqueParticipacion += `<p class="texto-ayuda" style="margin-top:2px;"><strong>Comentario:</strong> ${r.comentario_instructor}</p>`;
+      } else {
+        bloqueParticipacion = `<p class="texto-ayuda" style="margin-top:8px;">Aún sin calificar.</p>`;
+      }
+    }
 
     return `
       <div class="actividad-tarjeta ${disponible ? 'disponible' : ''}">
         <div class="actividad-titulo">${a.titulo} <span class="etiqueta ${estadoClase}">${estadoTexto}</span></div>
         <div class="actividad-fechas">${badgeModalidad} · Del ${formatearFecha(a.fecha_inicio)} al ${formatearFecha(a.fecha_fin)}${a.tiempo_limite_minutos ? ` · ${a.tiempo_limite_minutos} min` : ''}</div>
         ${a.descripcion ? `<div class="actividad-desc">${a.descripcion}</div>` : ''}
-        ${disponible ? `<a href="${enlace}" class="btn btn-primario" style="margin-top:10px; display:inline-block; text-decoration:none;">${textoBoton}</a>` : ''}
+        ${esParticipacion ? bloqueParticipacion : (disponible ? `<a href="${enlace}" class="btn btn-primario" style="margin-top:10px; display:inline-block; text-decoration:none;">${textoBoton}</a>` : '')}
       </div>
     `;
   }).join('');

@@ -60,6 +60,7 @@
         <option value="examen_online">📝 Examen en línea (preguntas con puntos)</option>
         <option value="entrega_documento">📎 Entrega de documento (el aprendiz sube un archivo, tú calificas)</option>
         <option value="texto_fotos">✍️ Trabajo escrito + fotos (el aprendiz escribe y sube fotos de lo que hizo)</option>
+        <option value="participacion">🗣️ Participación / evaluación directa (tú calificas a cada uno, sin que entreguen nada)</option>
       </select>
     </div>
     <div class="grid-2">
@@ -221,7 +222,7 @@ async function cargarActividades(fichaId) {
     let estadoClase = 'etiqueta-gris';
     if (a.fecha_fin && ahora > new Date(a.fecha_fin)) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
     else if (a.fecha_inicio && ahora >= new Date(a.fecha_inicio)) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; }
-    const badgeModalidad = a.modalidad === 'entrega_documento' ? '📎 Entrega de documento' : a.modalidad === 'texto_fotos' ? '✍️ Trabajo escrito + fotos' : '📝 Examen en línea';
+    const badgeModalidad = a.modalidad === 'entrega_documento' ? '📎 Entrega de documento' : a.modalidad === 'texto_fotos' ? '✍️ Trabajo escrito + fotos' : a.modalidad === 'participacion' ? '🗣️ Participación / evaluación directa' : '📝 Examen en línea';
 
     return `
       <div class="actividad-tarjeta">
@@ -252,6 +253,48 @@ async function verResultados(examenId) {
   const actividad = actividadesCache[examenId];
   const esDocumento = actividad?.modalidad === 'entrega_documento';
   const esTextoFotos = actividad?.modalidad === 'texto_fotos';
+  const esParticipacion = actividad?.modalidad === 'participacion';
+
+  if (esParticipacion) {
+    const { data: aprendices, error: errAp } = await supabaseClient
+      .from('aprendices')
+      .select('id, nombre_completo')
+      .eq('ficha_id', actividad.ficha_id)
+      .order('nombre_completo');
+
+    if (errAp) { cont.innerHTML = `<p style="color:var(--rojo-error);">${errAp.message}</p>`; return; }
+
+    const { data: resultadosExistentes } = await supabaseClient
+      .from('resultados_examen')
+      .select('*')
+      .eq('examen_id', examenId);
+
+    const mapaResultados = {};
+    (resultadosExistentes || []).forEach(r => { mapaResultados[r.aprendiz_id] = r; });
+
+    cont.innerHTML = (aprendices || []).map(ap => {
+      const r = mapaResultados[ap.id];
+      const etiquetaTexto = r?.no_presentado ? 'No presentado' : (r?.revisado ? `Nota: ${r.puntaje_obtenido}` : 'Sin calificar');
+      const etiquetaClase = r?.no_presentado ? 'etiqueta-rojo' : (r?.revisado ? 'etiqueta-verde' : 'etiqueta-gris');
+      return `
+        <div class="tarjeta espaciado-v" style="margin-bottom:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <strong>${ap.nombre_completo}</strong>
+            <span class="etiqueta ${etiquetaClase}">${etiquetaTexto}</span>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
+            <input type="number" id="part-nota-${ap.id}" min="0" max="100" placeholder="Nota 0-100" value="${(!r?.no_presentado && r?.puntaje_obtenido != null) ? r.puntaje_obtenido : ''}" style="width:110px;">
+            <input type="text" id="part-comentario-${ap.id}" placeholder="Comentario (opcional)" value="${r?.comentario_instructor || ''}" style="flex:1; min-width:160px;">
+            <label style="display:flex; align-items:center; gap:4px; font-size:0.8rem; font-weight:400; cursor:pointer;">
+              <input type="checkbox" id="part-nopresentado-${ap.id}" ${r?.no_presentado ? 'checked' : ''}> No presentado
+            </label>
+            <button class="btn btn-primario" style="font-size:0.8rem; padding:6px 12px;" onclick="guardarParticipacion('${ap.id}', '${examenId}')">Guardar</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    return;
+  }
 
   const { data: resultados, error } = await supabaseClient
     .from('resultados_examen')
@@ -302,6 +345,26 @@ async function guardarNotaManual(resultadoId, examenId) {
   const comentario = document.getElementById(`comentario-manual-${resultadoId}`)?.value.trim() || null;
   if (nota === '') { alert('Escribe una nota.'); return; }
   const { error } = await supabaseClient.from('resultados_examen').update({ puntaje_obtenido: parseFloat(nota), revisado: true, comentario_instructor: comentario }).eq('id', resultadoId);
+  if (error) { alert('Error: ' + error.message); return; }
+  verResultados(examenId);
+}
+
+async function guardarParticipacion(aprendizId, examenId) {
+  const nota = document.getElementById(`part-nota-${aprendizId}`).value;
+  const comentario = document.getElementById(`part-comentario-${aprendizId}`).value.trim() || null;
+  const noPresentado = document.getElementById(`part-nopresentado-${aprendizId}`).checked;
+
+  if (!noPresentado && nota === '') { alert('Escribe una nota o marca "No presentado".'); return; }
+
+  const { error } = await supabaseClient.from('resultados_examen').upsert({
+    examen_id: examenId,
+    aprendiz_id: aprendizId,
+    puntaje_obtenido: noPresentado ? null : parseFloat(nota),
+    no_presentado: noPresentado,
+    comentario_instructor: comentario,
+    revisado: true,
+  }, { onConflict: 'examen_id,aprendiz_id' });
+
   if (error) { alert('Error: ' + error.message); return; }
   verResultados(examenId);
 }
