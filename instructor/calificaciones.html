@@ -149,7 +149,7 @@ async function cargarCalificaciones() {
 
   const { data: aprendices, error: errorAprendices } = await supabaseClient
     .from('aprendices')
-    .select('id, nombre_completo, nota_actividades')
+    .select('id, nombre_completo')
     .eq('ficha_id', fichaId)
     .order('nombre_completo');
 
@@ -166,6 +166,21 @@ async function cargarCalificaciones() {
   if (idsTemas.length > 0) {
     const { data } = await supabaseClient.from('foros_respuestas').select('aprendiz_id, calificacion').in('tema_id', idsTemas).not('calificacion', 'is', null);
     respuestasForo = data || [];
+  }
+
+  // Actividades: promedio automático de todas las actividades ya calificadas (examen, documento, trabajo+fotos, participación)
+  const { data: actividadesFicha } = await supabaseClient.from('examenes').select('id').eq('ficha_id', fichaId);
+  const idsActividades = (actividadesFicha || []).map(a => a.id);
+  let resultadosActividades = [];
+  if (idsActividades.length > 0) {
+    const { data } = await supabaseClient
+      .from('resultados_examen')
+      .select('aprendiz_id, puntaje_obtenido')
+      .in('examen_id', idsActividades)
+      .eq('revisado', true)
+      .eq('no_presentado', false)
+      .not('puntaje_obtenido', 'is', null);
+    resultadosActividades = data || [];
   }
 
   const pesoAsistencia = (ficha.peso_asistencia ?? 30) / 100;
@@ -186,7 +201,10 @@ async function cargarCalificaciones() {
     const notasForo = respuestasForo.filter(r => r.aprendiz_id === a.id).map(r => r.calificacion);
     const notaForo = notasForo.length > 0 ? (notasForo.reduce((s, n) => s + n, 0) / notasForo.length) : null;
 
-    const notaActividades = a.nota_actividades !== null && a.nota_actividades !== undefined ? parseFloat(a.nota_actividades) : null;
+    const misResultadosActividades = resultadosActividades.filter(r => r.aprendiz_id === a.id).map(r => r.puntaje_obtenido);
+    const notaActividades = misResultadosActividades.length > 0
+      ? misResultadosActividades.reduce((s, n) => s + n, 0) / misResultadosActividades.length
+      : null;
 
     const componentes = [
       { nota: notaAsistencia, peso: pesoAsistencia },
@@ -197,7 +215,7 @@ async function cargarCalificaciones() {
     const pesoTotal = componentes.reduce((s, c) => s + c.peso, 0);
     const notaFinal = pesoTotal > 0 ? componentes.reduce((s, c) => s + c.nota * c.peso, 0) / pesoTotal : null;
 
-    return { id: a.id, nombre: a.nombre_completo, pctAsistencia, notaForo, notaActividades, notaFinal };
+    return { id: a.id, nombre: a.nombre_completo, pctAsistencia, notaForo, notaActividades, cantidadActividades: misResultadosActividades.length, notaFinal };
   });
 
   filas.sort((x, y) => (y.notaFinal ?? -1) - (x.notaFinal ?? -1));
@@ -208,7 +226,7 @@ async function cargarCalificaciones() {
       <td>${f.nombre}</td>
       <td>${f.pctAsistencia !== null ? f.pctAsistencia + '%' : '—'}</td>
       <td>${f.notaForo !== null ? Math.round(f.notaForo) : '—'}</td>
-      <td><input type="number" class="nota-actividades" min="0" max="100" value="${f.notaActividades ?? ''}" placeholder="0-100" onchange="guardarNotaActividades('${f.id}', this.value)"></td>
+      <td>${f.notaActividades !== null ? `${Math.round(f.notaActividades)} <span style="color:var(--gris-texto); font-size:0.78rem;">(${f.cantidadActividades} act.)</span>` : '<span style="color:var(--gris-texto);">Sin datos</span>'}</td>
       <td>
         ${f.notaFinal !== null ? `
           <div class="fila-nota">
@@ -219,13 +237,6 @@ async function cargarCalificaciones() {
       </td>
     </tr>
   `).join('');
-}
-
-async function guardarNotaActividades(aprendizId, valor) {
-  const nota = valor === '' ? null : parseFloat(valor);
-  const { error } = await supabaseClient.from('aprendices').update({ nota_actividades: nota }).eq('id', aprendizId);
-  if (error) { alert('Error: ' + error.message); return; }
-  cargarCalificaciones();
 }
 
 async function guardarPesos() {

@@ -133,9 +133,23 @@ async function inicializar() {
   document.getElementById('valor-foro').textContent = notaForo !== null ? Math.round(notaForo) : '—';
   if (notaForo !== null) document.getElementById('valor-foro').style.color = colorNota(notaForo);
 
-  // Actividades
-  const { data: aprendiz } = await supabaseClient.from('aprendices').select('nota_actividades').eq('id', sesion.id).single();
-  const notaActividades = aprendiz && aprendiz.nota_actividades !== null ? parseFloat(aprendiz.nota_actividades) : null;
+  // Actividades: promedio automático de todas las actividades ya calificadas
+  const { data: actividadesFicha } = await supabaseClient.from('examenes').select('id').eq('ficha_id', sesion.ficha_id);
+  const idsActividades = (actividadesFicha || []).map(a => a.id);
+  let notaActividades = null;
+  if (idsActividades.length > 0) {
+    const { data: misResultados } = await supabaseClient
+      .from('resultados_examen')
+      .select('puntaje_obtenido')
+      .eq('aprendiz_id', sesion.id)
+      .in('examen_id', idsActividades)
+      .eq('revisado', true)
+      .eq('no_presentado', false)
+      .not('puntaje_obtenido', 'is', null);
+    if (misResultados && misResultados.length > 0) {
+      notaActividades = misResultados.reduce((s, r) => s + r.puntaje_obtenido, 0) / misResultados.length;
+    }
+  }
   document.getElementById('valor-actividades').textContent = notaActividades !== null ? Math.round(notaActividades) : '—';
   if (notaActividades !== null) document.getElementById('valor-actividades').style.color = colorNota(notaActividades);
 
