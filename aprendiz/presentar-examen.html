@@ -7,6 +7,9 @@
 <link rel="stylesheet" href="../css/styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+  mark.resaltado-amarillo { background:#fff3b0; border-radius:2px; }
+  mark.resaltado-rojo { background:#ffd1d1; border-radius:2px; }
+  mark.resaltado-verde { background:#c8f2cf; border-radius:2px; }
   .cronometro {
     position: sticky; top: 0; z-index: 10;
     background: var(--azul-sena); color: var(--blanco);
@@ -69,19 +72,32 @@ async function inicializar() {
 
   const { data: yaPresentado } = await supabaseClient
     .from('resultados_examen')
-    .select('id, puntaje_obtenido, revisado')
+    .select('id, puntaje_obtenido, revisado, respuestas, comentario_instructor')
     .eq('examen_id', examenId)
     .eq('aprendiz_id', sesion.id)
     .maybeSingle();
 
   if (yaPresentado) {
+    const preguntasAbiertas = (yaPresentado.respuestas || []).filter(r => r.tipo === 'abierta');
     document.getElementById('contenido').innerHTML = `
       <div class="tarjeta" style="text-align:center;">
         <h3>Ya presentaste este examen</h3>
         <p class="texto-ayuda">${yaPresentado.revisado || yaPresentado.puntaje_obtenido !== null
             ? `Tu nota: <strong>${yaPresentado.puntaje_obtenido}</strong>`
             : 'Tu instructor aún está revisando algunas de tus respuestas.'}</p>
-        <a href="examenes.html" class="btn btn-secundario" style="margin-top:10px; display:inline-block;">Volver</a>
+        ${yaPresentado.comentario_instructor ? `<p class="texto-ayuda" style="margin-top:6px;"><strong>Comentario:</strong> ${yaPresentado.comentario_instructor}</p>` : ''}
+        ${preguntasAbiertas.length > 0 ? `
+          <div style="text-align:left; margin-top:14px;">
+            ${preguntasAbiertas.some(p => p.respuesta_anotada) ? `<p style="font-size:0.72rem; color:var(--gris-texto); margin-bottom:6px;">🟡 Mejorar · 🔴 Error · 🟢 Bien hecho</p>` : ''}
+            ${preguntasAbiertas.map(p => `
+              <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
+                <p style="margin:0 0 4px; color:var(--gris-texto);">${p.enunciado}</p>
+                <p style="margin:0; white-space:pre-wrap; line-height:1.5;">${p.respuesta_anotada || (p.respuesta || '<em>Sin responder</em>')}</p>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        <a href="examenes.html" class="btn btn-secundario" style="margin-top:14px; display:inline-block;">Volver</a>
       </div>
     `;
     return;

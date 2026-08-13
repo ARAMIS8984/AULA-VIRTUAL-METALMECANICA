@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="../css/styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+  .texto-anotable mark.resaltado-amarillo { background:#fff3b0; cursor:help; border-radius:2px; }
+  .texto-anotable mark.resaltado-rojo { background:#ffd1d1; cursor:help; border-radius:2px; }
+  .texto-anotable mark.resaltado-verde { background:#c8f2cf; cursor:help; border-radius:2px; }
+  .btn-color { width:32px; height:32px; border-radius:6px; border:1px solid var(--gris-borde); cursor:pointer; }
   .actividad-tarjeta {
     border: 1px solid var(--gris-borde);
     border-radius: 10px;
@@ -317,27 +321,105 @@ async function verResultados(examenId) {
         </div>
       ` : esTextoFotos ? `
         <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
-          <p style="margin:0 0 8px; white-space:pre-wrap;">${r.texto_respuesta || '<em>Sin texto</em>'}</p>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <div class="leyenda-resaltado" style="font-size:0.72rem; color:var(--gris-texto); margin-bottom:4px;">🟡 Mejorar · 🔴 Error · 🟢 Bien hecho — selecciona texto y toca un color</div>
+          <div id="texto-anot-${r.id}" class="texto-anotable" data-original="${escapeAttr(r.texto_respuesta || '')}" style="white-space:pre-wrap; line-height:1.5; padding:6px 0;">${r.texto_respuesta_anotado || escapeHtml(r.texto_respuesta || '').replace(/\n/g, '<br>')}</div>
+          <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center;">
+            <button type="button" class="btn-color" style="background:#fff3b0;" onclick="resaltarSeleccion('texto-anot-${r.id}', 'amarillo')" title="Resaltar amarillo (mejorar)">🟡</button>
+            <button type="button" class="btn-color" style="background:#ffd1d1;" onclick="resaltarSeleccion('texto-anot-${r.id}', 'rojo')" title="Resaltar rojo (error)">🔴</button>
+            <button type="button" class="btn-color" style="background:#c8f2cf;" onclick="resaltarSeleccion('texto-anot-${r.id}', 'verde')" title="Resaltar verde (bien hecho)">🟢</button>
+            <button type="button" class="btn btn-secundario" style="font-size:0.75rem; padding:4px 10px;" onclick="deshacerResaltado('texto-anot-${r.id}')">Deshacer resaltados</button>
+            <button type="button" class="btn btn-secundario" style="font-size:0.75rem; padding:4px 10px;" onclick="guardarResaltadoTexto('${r.id}')">💾 Guardar resaltado</button>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
             ${(r.fotos_urls || []).map(url => `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" loading="lazy" style="width:70px; height:70px; object-fit:cover; border-radius:6px; border:1px solid var(--gris-borde);"></a>`).join('')}
           </div>
         </div>
-      ` : (r.respuestas || []).map(resp => `
+      ` : (r.respuestas || []).map((resp, idx) => `
         <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
           <p style="margin:0 0 2px; color:var(--gris-texto);">${resp.enunciado}</p>
-          <p style="margin:0;">${resp.respuesta || '<em>Sin responder</em>'} ${resp.tipo === 'opcion_multiple' ? (resp.correcta ? '✅' : '❌') : ''}</p>
+          ${resp.tipo === 'abierta' ? `
+            <div class="leyenda-resaltado" style="font-size:0.72rem; color:var(--gris-texto); margin-bottom:4px;">🟡 Mejorar · 🔴 Error · 🟢 Bien hecho</div>
+            <div id="resp-anot-${r.id}-${idx}" class="texto-anotable" data-original="${escapeAttr(resp.respuesta || '')}" style="white-space:pre-wrap; line-height:1.5; padding:4px 0;">${resp.respuesta_anotada || escapeHtml(resp.respuesta || '<em>Sin responder</em>').replace(/\n/g, '<br>')}</div>
+            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center;">
+              <button type="button" class="btn-color" style="background:#fff3b0;" onclick="resaltarSeleccion('resp-anot-${r.id}-${idx}', 'amarillo')" title="Resaltar amarillo (mejorar)">🟡</button>
+              <button type="button" class="btn-color" style="background:#ffd1d1;" onclick="resaltarSeleccion('resp-anot-${r.id}-${idx}', 'rojo')" title="Resaltar rojo (error)">🔴</button>
+              <button type="button" class="btn-color" style="background:#c8f2cf;" onclick="resaltarSeleccion('resp-anot-${r.id}-${idx}', 'verde')" title="Resaltar verde (bien hecho)">🟢</button>
+              <button type="button" class="btn btn-secundario" style="font-size:0.75rem; padding:4px 10px;" onclick="deshacerResaltado('resp-anot-${r.id}-${idx}')">Deshacer resaltados</button>
+              <button type="button" class="btn btn-secundario" style="font-size:0.75rem; padding:4px 10px;" onclick="guardarResaltadoRespuesta('${r.id}', ${idx})">💾 Guardar resaltado</button>
+            </div>
+          ` : `<p style="margin:0;">${resp.respuesta || '<em>Sin responder</em>'} ${resp.tipo === 'opcion_multiple' ? (resp.correcta ? '✅' : '❌') : ''}</p>`}
         </div>
       `).join('')}
       ${r.comentario_instructor ? `<p style="margin:8px 0 0; font-size:0.82rem; color:var(--gris-texto);"><strong>Tu comentario:</strong> ${r.comentario_instructor}</p>` : ''}
-      ${!r.revisado ? `
-        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
-          <input type="number" id="nota-manual-${r.id}" min="0" max="100" placeholder="Nota 0-100" style="width:110px;">
-          <input type="text" id="comentario-manual-${r.id}" placeholder="Comentario (opcional)" style="flex:1; min-width:160px;">
-          <button class="btn btn-primario" style="font-size:0.8rem; padding:6px 12px;" onclick="guardarNotaManual('${r.id}', '${examenId}')">Guardar nota final</button>
-        </div>
-      ` : ''}
+      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
+        <input type="number" id="nota-manual-${r.id}" min="0" max="100" placeholder="Nota 0-100" value="${r.puntaje_obtenido != null ? r.puntaje_obtenido : ''}" style="width:110px;">
+        <input type="text" id="comentario-manual-${r.id}" placeholder="Comentario (opcional)" value="${r.comentario_instructor || ''}" style="flex:1; min-width:160px;">
+        <button class="btn btn-primario" style="font-size:0.8rem; padding:6px 12px;" onclick="guardarNotaManual('${r.id}', '${examenId}')">${r.revisado ? 'Guardar cambios' : 'Guardar nota final'}</button>
+      </div>
     </div>
   `).join('');
+}
+
+function escapeHtml(texto) {
+  const div = document.createElement('div');
+  div.textContent = texto || '';
+  return div.innerHTML;
+}
+
+function escapeAttr(texto) {
+  return (texto || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function resaltarSeleccion(containerId, color) {
+  const contenedor = document.getElementById(containerId);
+  const seleccion = window.getSelection();
+  if (!seleccion || seleccion.rangeCount === 0 || seleccion.isCollapsed) {
+    alert('Primero selecciona el texto que quieres resaltar.');
+    return;
+  }
+  const rango = seleccion.getRangeAt(0);
+  if (!contenedor.contains(rango.commonAncestorContainer)) {
+    alert('Selecciona texto dentro de la respuesta del aprendiz.');
+    return;
+  }
+  const comentario = (prompt('Comentario para esta parte (opcional):') || '').trim();
+  const marca = document.createElement('mark');
+  marca.className = `resaltado-${color}`;
+  if (comentario) marca.title = comentario;
+  try {
+    rango.surroundContents(marca);
+  } catch (e) {
+    const contenido = rango.extractContents();
+    marca.appendChild(contenido);
+    rango.insertNode(marca);
+  }
+  seleccion.removeAllRanges();
+}
+
+function deshacerResaltado(containerId) {
+  if (!confirm('¿Quitar todos los resaltados de este texto? (esto no se guarda hasta que toques "Guardar resaltado")')) return;
+  const contenedor = document.getElementById(containerId);
+  const original = contenedor.dataset.original || '';
+  contenedor.innerHTML = escapeHtml(original).replace(/\n/g, '<br>');
+}
+
+async function guardarResaltadoTexto(resultadoId) {
+  const contenedor = document.getElementById(`texto-anot-${resultadoId}`);
+  const { error } = await supabaseClient.from('resultados_examen').update({ texto_respuesta_anotado: contenedor.innerHTML }).eq('id', resultadoId);
+  if (error) { alert('Error al guardar el resaltado: ' + error.message); return; }
+  alert('Resaltado guardado.');
+}
+
+async function guardarResaltadoRespuesta(resultadoId, indice) {
+  const contenedor = document.getElementById(`resp-anot-${resultadoId}-${indice}`);
+  const { data: actual, error: errFetch } = await supabaseClient.from('resultados_examen').select('respuestas').eq('id', resultadoId).single();
+  if (errFetch || !actual) { alert('No se pudo leer la actividad.'); return; }
+  const respuestas = actual.respuestas || [];
+  if (!respuestas[indice]) { alert('No se encontró la pregunta.'); return; }
+  respuestas[indice].respuesta_anotada = contenedor.innerHTML;
+  const { error } = await supabaseClient.from('resultados_examen').update({ respuestas }).eq('id', resultadoId);
+  if (error) { alert('Error al guardar el resaltado: ' + error.message); return; }
+  alert('Resaltado guardado.');
 }
 
 async function guardarNotaManual(resultadoId, examenId) {
