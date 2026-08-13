@@ -284,15 +284,15 @@ async function verResultados(examenId) {
         <div class="tarjeta espaciado-v" style="margin-bottom:8px;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <strong>${ap.nombre_completo}</strong>
-            <span class="etiqueta ${etiquetaClase}">${etiquetaTexto}</span>
+            <span class="etiqueta ${etiquetaClase}" id="pbadge-${ap.id}">${etiquetaTexto}</span>
           </div>
           <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
-            <input type="number" id="part-nota-${ap.id}" min="0" max="100" placeholder="Nota 0-100" value="${(!r?.no_presentado && r?.puntaje_obtenido != null) ? r.puntaje_obtenido : ''}" style="width:110px;">
-            <input type="text" id="part-comentario-${ap.id}" placeholder="Comentario (opcional)" value="${r?.comentario_instructor || ''}" style="flex:1; min-width:160px;">
+            <input type="number" id="part-nota-${ap.id}" min="0" max="100" placeholder="Nota 0-100" value="${(!r?.no_presentado && r?.puntaje_obtenido != null) ? r.puntaje_obtenido : ''}" oninput="programarGuardadoParticipacion('${ap.id}', '${examenId}')" style="width:110px;">
+            <input type="text" id="part-comentario-${ap.id}" placeholder="Comentario (opcional)" value="${r?.comentario_instructor || ''}" oninput="programarGuardadoParticipacion('${ap.id}', '${examenId}')" style="flex:1; min-width:160px;">
             <label style="display:flex; align-items:center; gap:4px; font-size:0.8rem; font-weight:400; cursor:pointer;">
-              <input type="checkbox" id="part-nopresentado-${ap.id}" ${r?.no_presentado ? 'checked' : ''}> No presentado
+              <input type="checkbox" id="part-nopresentado-${ap.id}" ${r?.no_presentado ? 'checked' : ''} onchange="guardarParticipacion('${ap.id}', '${examenId}')"> No presentado
             </label>
-            <button class="btn btn-primario" style="font-size:0.8rem; padding:6px 12px;" onclick="guardarParticipacion('${ap.id}', '${examenId}')">Guardar</button>
+            <span id="guardado-p-${ap.id}" style="font-size:0.75rem; min-width:60px;"></span>
           </div>
         </div>
       `;
@@ -313,7 +313,7 @@ async function verResultados(examenId) {
     <div class="tarjeta espaciado-v" style="margin-bottom:8px;">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <strong>${r.aprendices?.nombre_completo || 'Aprendiz'}</strong>
-        <span class="etiqueta ${r.revisado ? 'etiqueta-verde' : 'etiqueta-gris'}">${r.revisado ? `Nota: ${r.puntaje_obtenido}` : 'Pendiente de revisión'}</span>
+        <span class="etiqueta ${r.revisado ? 'etiqueta-verde' : 'etiqueta-gris'}" id="badge-${r.id}">${r.revisado ? `Nota: ${r.puntaje_obtenido}` : 'Pendiente de revisión'}</span>
       </div>
       ${esDocumento ? `
         <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
@@ -321,14 +321,14 @@ async function verResultados(examenId) {
         </div>
       ` : esTextoFotos ? `
         <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
-          <div class="leyenda-resaltado" style="font-size:0.72rem; color:var(--gris-texto); margin-bottom:4px;">🟡 Mejorar · 🔴 Error · 🟢 Bien hecho — selecciona texto y toca un color</div>
+          <div class="leyenda-resaltado" style="font-size:0.72rem; color:var(--gris-texto); margin-bottom:4px;">🟡 Mejorar · 🔴 Error · 🟢 Bien hecho — selecciona texto y toca un color (se guarda solo)</div>
           <div id="texto-anot-${r.id}" class="texto-anotable" data-original="${escapeAttr(r.texto_respuesta || '')}" style="white-space:pre-wrap; line-height:1.5; padding:6px 0;">${r.texto_respuesta_anotado || escapeHtml(r.texto_respuesta || '').replace(/\n/g, '<br>')}</div>
           <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center;">
-            <button type="button" class="btn-color" style="background:#fff3b0;" onclick="resaltarSeleccion('texto-anot-${r.id}', 'amarillo')" title="Resaltar amarillo (mejorar)">🟡</button>
-            <button type="button" class="btn-color" style="background:#ffd1d1;" onclick="resaltarSeleccion('texto-anot-${r.id}', 'rojo')" title="Resaltar rojo (error)">🔴</button>
-            <button type="button" class="btn-color" style="background:#c8f2cf;" onclick="resaltarSeleccion('texto-anot-${r.id}', 'verde')" title="Resaltar verde (bien hecho)">🟢</button>
-            <button type="button" class="btn btn-secundario" style="font-size:0.75rem; padding:4px 10px;" onclick="deshacerResaltado('texto-anot-${r.id}')">Deshacer resaltados</button>
-            <button type="button" class="btn btn-secundario" style="font-size:0.75rem; padding:4px 10px;" onclick="guardarResaltadoTexto('${r.id}')">💾 Guardar resaltado</button>
+            <button type="button" class="btn-color" style="background:#fff3b0;" onclick="resaltarSeleccion('texto-anot-${r.id}', 'amarillo', 'texto', '${r.id}')" title="Resaltar amarillo (mejorar)">🟡</button>
+            <button type="button" class="btn-color" style="background:#ffd1d1;" onclick="resaltarSeleccion('texto-anot-${r.id}', 'rojo', 'texto', '${r.id}')" title="Resaltar rojo (error)">🔴</button>
+            <button type="button" class="btn-color" style="background:#c8f2cf;" onclick="resaltarSeleccion('texto-anot-${r.id}', 'verde', 'texto', '${r.id}')" title="Resaltar verde (bien hecho)">🟢</button>
+            <button type="button" class="btn btn-secundario" style="font-size:0.75rem; padding:4px 10px;" onclick="deshacerResaltado('texto-anot-${r.id}', 'texto', '${r.id}')">Deshacer resaltados</button>
+            <span id="guardado-${r.id}" style="font-size:0.75rem;"></span>
           </div>
           <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
             ${(r.fotos_urls || []).map(url => `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" loading="lazy" style="width:70px; height:70px; object-fit:cover; border-radius:6px; border:1px solid var(--gris-borde);"></a>`).join('')}
@@ -338,23 +338,23 @@ async function verResultados(examenId) {
         <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
           <p style="margin:0 0 2px; color:var(--gris-texto);">${resp.enunciado}</p>
           ${resp.tipo === 'abierta' ? `
-            <div class="leyenda-resaltado" style="font-size:0.72rem; color:var(--gris-texto); margin-bottom:4px;">🟡 Mejorar · 🔴 Error · 🟢 Bien hecho</div>
+            <div class="leyenda-resaltado" style="font-size:0.72rem; color:var(--gris-texto); margin-bottom:4px;">🟡 Mejorar · 🔴 Error · 🟢 Bien hecho (se guarda solo)</div>
             <div id="resp-anot-${r.id}-${idx}" class="texto-anotable" data-original="${escapeAttr(resp.respuesta || '')}" style="white-space:pre-wrap; line-height:1.5; padding:4px 0;">${resp.respuesta_anotada || escapeHtml(resp.respuesta || '<em>Sin responder</em>').replace(/\n/g, '<br>')}</div>
             <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center;">
-              <button type="button" class="btn-color" style="background:#fff3b0;" onclick="resaltarSeleccion('resp-anot-${r.id}-${idx}', 'amarillo')" title="Resaltar amarillo (mejorar)">🟡</button>
-              <button type="button" class="btn-color" style="background:#ffd1d1;" onclick="resaltarSeleccion('resp-anot-${r.id}-${idx}', 'rojo')" title="Resaltar rojo (error)">🔴</button>
-              <button type="button" class="btn-color" style="background:#c8f2cf;" onclick="resaltarSeleccion('resp-anot-${r.id}-${idx}', 'verde')" title="Resaltar verde (bien hecho)">🟢</button>
-              <button type="button" class="btn btn-secundario" style="font-size:0.75rem; padding:4px 10px;" onclick="deshacerResaltado('resp-anot-${r.id}-${idx}')">Deshacer resaltados</button>
-              <button type="button" class="btn btn-secundario" style="font-size:0.75rem; padding:4px 10px;" onclick="guardarResaltadoRespuesta('${r.id}', ${idx})">💾 Guardar resaltado</button>
+              <button type="button" class="btn-color" style="background:#fff3b0;" onclick="resaltarSeleccion('resp-anot-${r.id}-${idx}', 'amarillo', 'respuesta', '${r.id}', ${idx})" title="Resaltar amarillo (mejorar)">🟡</button>
+              <button type="button" class="btn-color" style="background:#ffd1d1;" onclick="resaltarSeleccion('resp-anot-${r.id}-${idx}', 'rojo', 'respuesta', '${r.id}', ${idx})" title="Resaltar rojo (error)">🔴</button>
+              <button type="button" class="btn-color" style="background:#c8f2cf;" onclick="resaltarSeleccion('resp-anot-${r.id}-${idx}', 'verde', 'respuesta', '${r.id}', ${idx})" title="Resaltar verde (bien hecho)">🟢</button>
+              <button type="button" class="btn btn-secundario" style="font-size:0.75rem; padding:4px 10px;" onclick="deshacerResaltado('resp-anot-${r.id}-${idx}', 'respuesta', '${r.id}', ${idx})">Deshacer resaltados</button>
+              <span id="guardado-${r.id}-${idx}" style="font-size:0.75rem;"></span>
             </div>
           ` : `<p style="margin:0;">${resp.respuesta || '<em>Sin responder</em>'} ${resp.tipo === 'opcion_multiple' ? (resp.correcta ? '✅' : '❌') : ''}</p>`}
         </div>
       `).join('')}
       ${r.comentario_instructor ? `<p style="margin:8px 0 0; font-size:0.82rem; color:var(--gris-texto);"><strong>Tu comentario:</strong> ${r.comentario_instructor}</p>` : ''}
       <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center;">
-        <input type="number" id="nota-manual-${r.id}" min="0" max="100" placeholder="Nota 0-100" value="${r.puntaje_obtenido != null ? r.puntaje_obtenido : ''}" style="width:110px;">
-        <input type="text" id="comentario-manual-${r.id}" placeholder="Comentario (opcional)" value="${r.comentario_instructor || ''}" style="flex:1; min-width:160px;">
-        <button class="btn btn-primario" style="font-size:0.8rem; padding:6px 12px;" onclick="guardarNotaManual('${r.id}', '${examenId}')">${r.revisado ? 'Guardar cambios' : 'Guardar nota final'}</button>
+        <input type="number" id="nota-manual-${r.id}" min="0" max="100" placeholder="Nota 0-100" value="${r.puntaje_obtenido != null ? r.puntaje_obtenido : ''}" oninput="programarGuardadoNota('${r.id}', '${examenId}')" style="width:110px;">
+        <input type="text" id="comentario-manual-${r.id}" placeholder="Comentario (opcional)" value="${r.comentario_instructor || ''}" oninput="programarGuardadoNota('${r.id}', '${examenId}')" style="flex:1; min-width:160px;">
+        <span id="guardado-nota-${r.id}" style="font-size:0.75rem; min-width:60px;"></span>
       </div>
     </div>
   `).join('');
@@ -370,7 +370,16 @@ function escapeAttr(texto) {
   return (texto || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function resaltarSeleccion(containerId, color) {
+function mostrarEstadoGuardado(id, texto, esError) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = texto;
+  el.style.color = esError ? 'var(--rojo-error)' : '#2f9e44';
+  clearTimeout(el._temporizador);
+  el._temporizador = setTimeout(() => { el.textContent = ''; }, 2000);
+}
+
+async function resaltarSeleccion(containerId, color, tipo, resultadoId, indice) {
   const contenedor = document.getElementById(containerId);
   const seleccion = window.getSelection();
   if (!seleccion || seleccion.rangeCount === 0 || seleccion.isCollapsed) {
@@ -394,41 +403,60 @@ function resaltarSeleccion(containerId, color) {
     rango.insertNode(marca);
   }
   seleccion.removeAllRanges();
+  await guardarResaltado(tipo, resultadoId, indice);
 }
 
-function deshacerResaltado(containerId) {
-  if (!confirm('¿Quitar todos los resaltados de este texto? (esto no se guarda hasta que toques "Guardar resaltado")')) return;
+async function deshacerResaltado(containerId, tipo, resultadoId, indice) {
+  if (!confirm('¿Quitar todos los resaltados de este texto?')) return;
   const contenedor = document.getElementById(containerId);
   const original = contenedor.dataset.original || '';
   contenedor.innerHTML = escapeHtml(original).replace(/\n/g, '<br>');
+  await guardarResaltado(tipo, resultadoId, indice);
 }
 
-async function guardarResaltadoTexto(resultadoId) {
-  const contenedor = document.getElementById(`texto-anot-${resultadoId}`);
-  const { error } = await supabaseClient.from('resultados_examen').update({ texto_respuesta_anotado: contenedor.innerHTML }).eq('id', resultadoId);
-  if (error) { alert('Error al guardar el resaltado: ' + error.message); return; }
-  alert('Resaltado guardado.');
+async function guardarResaltado(tipo, resultadoId, indice) {
+  if (tipo === 'texto') {
+    const contenedor = document.getElementById(`texto-anot-${resultadoId}`);
+    const { error } = await supabaseClient.from('resultados_examen').update({ texto_respuesta_anotado: contenedor.innerHTML }).eq('id', resultadoId);
+    mostrarEstadoGuardado(`guardado-${resultadoId}`, error ? 'Error al guardar' : '✓ Guardado', !!error);
+  } else {
+    const contenedor = document.getElementById(`resp-anot-${resultadoId}-${indice}`);
+    const { data: actual, error: errFetch } = await supabaseClient.from('resultados_examen').select('respuestas').eq('id', resultadoId).single();
+    if (errFetch || !actual) { mostrarEstadoGuardado(`guardado-${resultadoId}-${indice}`, 'Error al guardar', true); return; }
+    const respuestas = actual.respuestas || [];
+    if (!respuestas[indice]) { mostrarEstadoGuardado(`guardado-${resultadoId}-${indice}`, 'Error al guardar', true); return; }
+    respuestas[indice].respuesta_anotada = contenedor.innerHTML;
+    const { error } = await supabaseClient.from('resultados_examen').update({ respuestas }).eq('id', resultadoId);
+    mostrarEstadoGuardado(`guardado-${resultadoId}-${indice}`, error ? 'Error al guardar' : '✓ Guardado', !!error);
+  }
 }
 
-async function guardarResaltadoRespuesta(resultadoId, indice) {
-  const contenedor = document.getElementById(`resp-anot-${resultadoId}-${indice}`);
-  const { data: actual, error: errFetch } = await supabaseClient.from('resultados_examen').select('respuestas').eq('id', resultadoId).single();
-  if (errFetch || !actual) { alert('No se pudo leer la actividad.'); return; }
-  const respuestas = actual.respuestas || [];
-  if (!respuestas[indice]) { alert('No se encontró la pregunta.'); return; }
-  respuestas[indice].respuesta_anotada = contenedor.innerHTML;
-  const { error } = await supabaseClient.from('resultados_examen').update({ respuestas }).eq('id', resultadoId);
-  if (error) { alert('Error al guardar el resaltado: ' + error.message); return; }
-  alert('Resaltado guardado.');
+let temporizadoresGuardado = {};
+
+function programarGuardadoNota(resultadoId, examenId) {
+  clearTimeout(temporizadoresGuardado[resultadoId]);
+  temporizadoresGuardado[resultadoId] = setTimeout(() => guardarNotaManual(resultadoId, examenId), 700);
 }
 
 async function guardarNotaManual(resultadoId, examenId) {
   const nota = document.getElementById(`nota-manual-${resultadoId}`).value;
   const comentario = document.getElementById(`comentario-manual-${resultadoId}`)?.value.trim() || null;
-  if (nota === '') { alert('Escribe una nota.'); return; }
-  const { error } = await supabaseClient.from('resultados_examen').update({ puntaje_obtenido: parseFloat(nota), revisado: true, comentario_instructor: comentario }).eq('id', resultadoId);
-  if (error) { alert('Error: ' + error.message); return; }
-  verResultados(examenId);
+  const datos = { comentario_instructor: comentario };
+  if (nota !== '') { datos.puntaje_obtenido = parseFloat(nota); datos.revisado = true; }
+  const { error } = await supabaseClient.from('resultados_examen').update(datos).eq('id', resultadoId);
+  mostrarEstadoGuardado(`guardado-nota-${resultadoId}`, error ? 'Error al guardar' : '✓ Guardado', !!error);
+  if (!error) {
+    const badge = document.getElementById(`badge-${resultadoId}`);
+    if (badge && nota !== '') {
+      badge.textContent = `Nota: ${nota}`;
+      badge.className = 'etiqueta etiqueta-verde';
+    }
+  }
+}
+
+function programarGuardadoParticipacion(aprendizId, examenId) {
+  clearTimeout(temporizadoresGuardado[aprendizId]);
+  temporizadoresGuardado[aprendizId] = setTimeout(() => guardarParticipacion(aprendizId, examenId), 700);
 }
 
 async function guardarParticipacion(aprendizId, examenId) {
@@ -436,7 +464,7 @@ async function guardarParticipacion(aprendizId, examenId) {
   const comentario = document.getElementById(`part-comentario-${aprendizId}`).value.trim() || null;
   const noPresentado = document.getElementById(`part-nopresentado-${aprendizId}`).checked;
 
-  if (!noPresentado && nota === '') { alert('Escribe una nota o marca "No presentado".'); return; }
+  if (!noPresentado && nota === '') { return; }
 
   const { error } = await supabaseClient.from('resultados_examen').upsert({
     examen_id: examenId,
@@ -447,8 +475,14 @@ async function guardarParticipacion(aprendizId, examenId) {
     revisado: true,
   }, { onConflict: 'examen_id,aprendiz_id' });
 
-  if (error) { alert('Error: ' + error.message); return; }
-  verResultados(examenId);
+  mostrarEstadoGuardado(`guardado-p-${aprendizId}`, error ? 'Error al guardar' : '✓ Guardado', !!error);
+  if (!error) {
+    const badge = document.getElementById(`pbadge-${aprendizId}`);
+    if (badge) {
+      badge.textContent = noPresentado ? 'No presentado' : `Nota: ${nota}`;
+      badge.className = `etiqueta ${noPresentado ? 'etiqueta-rojo' : 'etiqueta-verde'}`;
+    }
+  }
 }
 
 function formatearFecha(fecha) {
