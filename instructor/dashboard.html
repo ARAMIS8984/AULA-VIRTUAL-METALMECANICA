@@ -9,21 +9,6 @@
 </head>
 <body>
 
-<div class="topbar">
-  <div class="marca">Aula<span>SENA</span></div>
-  <nav>
-    <a href="dashboard.html" class="activo">Fichas</a>
-    <a href="asistencia.html">Asistencia</a>
-    <a href="material.html">Material</a>
-    <a href="examenes.html">Exámenes</a>
-    <a href="foro.html">Foro</a>
-    <a href="calificaciones.html">Calificaciones</a>
-    <a href="solicitudes.html">Solicitudes</a>
-    <a href="reportes.html">Reportes</a>
-  </nav>
-  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
-</div>
-
 <div class="contenedor" style="padding-top:32px; padding-bottom:48px;">
   <div id="alerta-solicitudes" class="oculto" style="background:#FAEEDA; border:1px solid #BA7517; border-radius:10px; padding:12px 16px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
     <span style="color:#854F0B; font-size:0.9rem;">⚠ <strong id="conteo-solicitudes"></strong> solicitud(es) de excusa pendientes de revisar</span>
@@ -41,8 +26,10 @@
 
 <script src="../js/supabase-config.js"></script>
 <script src="../js/auth.js"></script>
+<script src="../js/panel-instructor.js"></script>
 <script>
 requerirSesionInstructor();
+montarPanelInstructor('dashboard');
 
 async function cargarAlertaSolicitudes() {
   const { count, error } = await supabaseClient
