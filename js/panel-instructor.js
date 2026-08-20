@@ -53,10 +53,16 @@ function montarPanelInstructor(paginaActiva) {
     <div class="panel-fondo-movil" id="panel-fondo-movil"></div>
     <div class="panel-body">
       <aside class="panel-sidebar" id="panel-sidebar">
+        <div class="panel-selector-ficha">
+          <select id="panel-select-ficha" onchange="if(this.value) window.location.href='ficha-detalle.html?id='+this.value;">
+            <option value="">Selecciona una ficha</option>
+          </select>
+        </div>
         ${GRUPOS_MENU.map((g, i) => `
           <div class="panel-grupo ${grupoActivo === g ? 'abierto' : ''}">
             <button type="button" class="panel-grupo-titulo" onclick="alternarGrupoMenu(this)">
-              <span>${g.icono} ${g.titulo}</span>
+              <span class="panel-icono">✏️</span>
+              <span class="panel-grupo-texto">${g.titulo}</span>
               <span class="panel-chevron">▸</span>
             </button>
             <div class="panel-grupo-items">
@@ -96,6 +102,29 @@ function montarPanelInstructor(paginaActiva) {
   });
 
   mostrarNombreInstructor();
+  cargarSelectorFichas();
+}
+
+async function cargarSelectorFichas() {
+  const select = document.getElementById('panel-select-ficha');
+  if (!select) return;
+  const { data: fichas, error } = await supabaseClient
+    .from('fichas')
+    .select('id, numero_ficha, nombre_grupo')
+    .order('created_at', { ascending: false });
+
+  if (error || !fichas) return;
+
+  const parametros = new URLSearchParams(window.location.search);
+  const idActual = parametros.get('id') || parametros.get('ficha');
+
+  fichas.forEach(f => {
+    const opcion = document.createElement('option');
+    opcion.value = f.id;
+    opcion.textContent = `${f.numero_ficha}${f.nombre_grupo ? ' — ' + f.nombre_grupo : ''}`;
+    if (f.id === idActual) opcion.selected = true;
+    select.appendChild(opcion);
+  });
 }
 
 function alternarGrupoMenu(boton) {
