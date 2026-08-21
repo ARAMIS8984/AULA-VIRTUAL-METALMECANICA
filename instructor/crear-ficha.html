@@ -10,21 +10,6 @@
 </head>
 <body>
 
-<div class="topbar">
-  <div class="marca">Aula<span>SENA</span></div>
-  <nav>
-    <a href="dashboard.html">Fichas</a>
-    <a href="asistencia.html">Asistencia</a>
-    <a href="material.html">Material</a>
-    <a href="examenes.html">Exámenes</a>
-    <a href="foro.html">Foro</a>
-    <a href="calificaciones.html">Calificaciones</a>
-    <a href="solicitudes.html">Solicitudes</a>
-    <a href="reportes.html">Reportes</a>
-  </nav>
-  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
-</div>
-
 <div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:720px;">
   <h2 style="margin-bottom:6px;">Crear ficha nueva</h2>
   <p style="color:var(--gris-texto); margin-bottom:24px;">Sube el Reporte de Juicios de Evaluación (Excel exportado de SOFIA Plus).</p>
@@ -110,9 +95,11 @@
 
 <script src="../js/supabase-config.js"></script>
 <script src="../js/auth.js"></script>
+<script src="../js/panel-instructor.js"></script>
 <script src="../js/excel-parser.js"></script>
 <script>
 requerirSesionInstructor();
+montarPanelInstructor('crear-ficha');
 
 let datosParsed = null;
 

@@ -14,14 +14,6 @@
 </head>
 <body>
 
-<div class="topbar">
-  <div class="marca">Aula<span>SENA</span></div>
-  <nav>
-    <a href="dashboard.html">Fichas</a>
-  </nav>
-  <button class="btn-salir" onclick="cerrarSesionInstructor()">Salir</button>
-</div>
-
 <div class="contenedor" style="padding-top:32px; padding-bottom:48px; max-width:600px;">
   <h2 style="margin-bottom:4px;">Optimizar fotos existentes</h2>
   <p class="texto-ayuda" style="margin-bottom:20px;">Herramienta de un solo uso: reduce el tamaño de las fotos de perfil que ya estaban subidas antes de que activáramos la compresión automática. No afecta la foto en sí, solo su peso — se va a ver igual pero cargará más rápido.</p>
@@ -38,9 +30,11 @@
 
 <script src="../js/supabase-config.js"></script>
 <script src="../js/auth.js"></script>
+<script src="../js/panel-instructor.js"></script>
 <script src="../js/image-utils.js"></script>
 <script>
 requerirSesionInstructor();
+montarPanelInstructor('');
 
 let aprendicesConFoto = [];
 
