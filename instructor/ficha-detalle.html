@@ -44,6 +44,10 @@
       <h3 style="color:var(--azul-sena);">📊 Reportes</h3>
       <p class="texto-ayuda">Exporta información de la ficha</p>
     </a>
+    <a href="llamado-atencion.html" id="link-llamado-atencion" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
+      <h3 style="color:var(--azul-sena);">⚠️ Llamado de atención</h3>
+      <p class="texto-ayuda">Genera un llamado de atención para un aprendiz de esta ficha</p>
+    </a>
   </div>
 
   <div class="tarjeta">
@@ -72,7 +76,7 @@ if (!fichaId) {
 }
 
 // Propagar el id de la ficha a los enlaces de los módulos
-['link-asistencia','link-material','link-examenes','link-reportes'].forEach(idEnlace => {
+['link-asistencia','link-material','link-examenes','link-reportes','link-llamado-atencion'].forEach(idEnlace => {
   const el = document.getElementById(idEnlace);
   el.href = `${el.getAttribute('href')}?ficha_id=${fichaId}`;
 });

@@ -80,9 +80,22 @@
   <!-- PANEL 1 -->
   <div id="hl-panel1" class="hl-panel active">
     <div class="hl-card">
-      <h2>Datos del aprendiz</h2>
+      <h2>Ficha y aprendiz</h2>
       <div class="hl-grid2">
-        <div class="hl-field full"><label>Nombre completo del aprendiz</label>
+        <div class="hl-field full">
+          <label>Ficha</label>
+          <select id="hl-select-ficha" onchange="hlAlSeleccionarFicha()">
+            <option value="">Cargando fichas...</option>
+          </select>
+        </div>
+        <div class="hl-field full hl-campo-oculto" id="hl-wrap-select-aprendiz">
+          <label>Aprendiz</label>
+          <select id="hl-select-aprendiz" onchange="hlAlSeleccionarAprendiz()">
+            <option value="">Selecciona primero una ficha...</option>
+          </select>
+        </div>
+        <div class="hl-field full" id="hl-wrap-aprendiz-manual">
+          <label>Nombre completo del aprendiz</label>
           <input type="text" id="hl-nombreAprendiz" placeholder="Ej: NAILEA YORLYNES HERRERA HERRERA"></div>
         <div class="hl-field"><label>Fecha del documento</label><input type="date" id="hl-fecha"></div>
       </div>
@@ -559,6 +572,117 @@ function hlGenerarPDF(){
 }
 
 document.getElementById('hl-fecha').valueAsDate=new Date();
+
+// ===== Autocompletado desde la ficha (Supabase) =====
+let hlFichas = [];
+let hlAprendices = [];
+
+async function hlInicializarFichas() {
+  const sel = document.getElementById('hl-select-ficha');
+  const { data, error } = await supabaseClient
+    .from('fichas')
+    .select('id, numero_ficha, programa, nombre_grupo')
+    .order('numero_ficha');
+
+  if (error || !data) {
+    sel.innerHTML = '<option value="">No fue posible cargar fichas — escribe los datos manualmente</option>';
+    hlModoManualCompleto();
+    return;
+  }
+
+  hlFichas = data;
+  sel.innerHTML = '<option value="">— Sin ficha / escribir datos manualmente —</option>' +
+    data.map(f => `<option value="${f.id}">Ficha ${f.numero_ficha}${f.nombre_grupo ? ' · ' + f.nombre_grupo : ''}</option>`).join('');
+
+  const parametros = new URLSearchParams(window.location.search);
+  const fichaIdInicial = parametros.get('ficha_id') || parametros.get('ficha');
+  if (fichaIdInicial && data.some(f => String(f.id) === String(fichaIdInicial))) {
+    sel.value = fichaIdInicial;
+    hlAlSeleccionarFicha();
+  }
+}
+
+function hlModoManualCompleto() {
+  document.getElementById('hl-wrap-select-aprendiz').classList.add('hl-campo-oculto');
+  document.getElementById('hl-wrap-aprendiz-manual').classList.remove('hl-campo-oculto');
+  document.getElementById('hl-ficha').readOnly = false;
+  document.getElementById('hl-programa').disabled = false;
+}
+
+async function hlAlSeleccionarFicha() {
+  const sel = document.getElementById('hl-select-ficha');
+  const fichaId = sel.value;
+  const campoFicha = document.getElementById('hl-ficha');
+  const campoPrograma = document.getElementById('hl-programa');
+
+  if (!fichaId) {
+    hlModoManualCompleto();
+    campoFicha.value = '';
+    campoPrograma.value = '';
+    document.getElementById('hl-select-aprendiz').innerHTML = '<option value="">Selecciona primero una ficha...</option>';
+    return;
+  }
+
+  const ficha = hlFichas.find(f => String(f.id) === String(fichaId));
+  if (!ficha) return;
+
+  // Autocompletar número de ficha (bloqueado, viene de la base de datos)
+  campoFicha.value = ficha.numero_ficha;
+  campoFicha.readOnly = true;
+
+  // Autocompletar programa: buscar coincidencia exacta en las opciones ya existentes
+  let coincide = false;
+  for (const opt of campoPrograma.options) {
+    if (opt.value === ficha.programa) { coincide = true; break; }
+  }
+  if (!coincide && ficha.programa) {
+    const nuevaOpcion = document.createElement('option');
+    nuevaOpcion.value = ficha.programa;
+    nuevaOpcion.textContent = ficha.programa;
+    campoPrograma.appendChild(nuevaOpcion);
+  }
+  campoPrograma.value = ficha.programa || '';
+  campoPrograma.disabled = true;
+
+  await hlCargarAprendices(fichaId);
+}
+
+async function hlCargarAprendices(fichaId) {
+  const selAprendiz = document.getElementById('hl-select-aprendiz');
+  selAprendiz.innerHTML = '<option value="">Cargando aprendices...</option>';
+
+  const { data, error } = await supabaseClient
+    .from('aprendices')
+    .select('id, nombre_completo')
+    .eq('ficha_id', fichaId)
+    .order('nombre_completo');
+
+  hlAprendices = (!error && data) ? data : [];
+
+  selAprendiz.innerHTML = '<option value="">Selecciona un aprendiz...</option>' +
+    hlAprendices.map(a => `<option value="${a.id}">${a.nombre_completo}</option>`).join('') +
+    '<option value="__otro__">Otro (escribir nombre manualmente)</option>';
+
+  document.getElementById('hl-wrap-select-aprendiz').classList.remove('hl-campo-oculto');
+  document.getElementById('hl-wrap-aprendiz-manual').classList.add('hl-campo-oculto');
+  document.getElementById('hl-nombreAprendiz').value = '';
+}
+
+function hlAlSeleccionarAprendiz() {
+  const sel = document.getElementById('hl-select-aprendiz');
+  const wrapManual = document.getElementById('hl-wrap-aprendiz-manual');
+  if (sel.value === '__otro__') {
+    wrapManual.classList.remove('hl-campo-oculto');
+    document.getElementById('hl-nombreAprendiz').value = '';
+    document.getElementById('hl-nombreAprendiz').focus();
+    return;
+  }
+  wrapManual.classList.add('hl-campo-oculto');
+  const aprendiz = hlAprendices.find(a => String(a.id) === String(sel.value));
+  document.getElementById('hl-nombreAprendiz').value = aprendiz ? aprendiz.nombre_completo : '';
+}
+
+hlInicializarFichas();
 </script>
 
 </body>
