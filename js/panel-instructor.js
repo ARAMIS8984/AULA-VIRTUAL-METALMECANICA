@@ -17,6 +17,14 @@ const GRUPOS_MENU = [
       { texto: 'Asistencia', href: 'asistencia.html', id: 'asistencia' },
       { texto: 'Calificaciones', href: 'calificaciones.html', id: 'calificaciones' },
       { texto: 'Reportes', href: 'reportes.html', id: 'reportes' },
+      { texto: 'Llamado de Atención', href: 'https://aramis8984.github.io/llamado-atencion-sena/?ir=llamados', externo: true },
+      {
+        texto: 'Plan de Mejoramiento',
+        subitems: [
+          { texto: 'Académico', href: 'https://aramis8984.github.io/llamado-atencion-sena/?ir=plan-academico' },
+          { texto: 'Disciplinario', href: 'https://aramis8984.github.io/llamado-atencion-sena/?ir=plan-disciplinario' },
+        ],
+      },
     ],
   },
   {
@@ -36,6 +44,29 @@ const GRUPOS_MENU = [
     ],
   },
 ];
+
+// Dibuja un item del menú: link normal, link externo (nueva pestaña), o submenú expandible con sub-links
+function renderItemMenu(item, paginaActiva) {
+  if (item.subitems) {
+    return `
+      <div class="panel-subgrupo">
+        <button type="button" class="panel-item panel-item-expandible" onclick="alternarSubmenu(this)">
+          <span>${item.texto}</span>
+          <span class="panel-chevron-sub">▸</span>
+        </button>
+        <div class="panel-subitems">
+          ${item.subitems.map(si => `<a href="${si.href}" target="_blank" rel="noopener" class="panel-item panel-subitem">${si.texto}</a>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+  const atributosExterno = item.externo ? ' target="_blank" rel="noopener"' : '';
+  return `<a href="${item.href}"${atributosExterno} class="panel-item ${item.id === paginaActiva ? 'activo' : ''}">${item.texto}</a>`;
+}
+
+function alternarSubmenu(boton) {
+  boton.parentElement.classList.toggle('abierto');
+}
 
 // paginaActiva: el id de la página actual (ej. 'asistencia'), para resaltarla y abrir su grupo
 function montarPanelInstructor(paginaActiva) {
@@ -66,9 +97,7 @@ function montarPanelInstructor(paginaActiva) {
               <span class="panel-chevron">▸</span>
             </button>
             <div class="panel-grupo-items">
-              ${g.items.map(item => `
-                <a href="${item.href}" class="panel-item ${item.id === paginaActiva ? 'activo' : ''}">${item.texto}</a>
-              `).join('')}
+              ${g.items.map(item => renderItemMenu(item, paginaActiva)).join('')}
             </div>
           </div>
         `).join('')}

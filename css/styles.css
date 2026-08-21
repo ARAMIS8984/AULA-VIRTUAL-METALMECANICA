@@ -365,6 +365,13 @@ tr:last-child td { border-bottom: none; }
 .panel-item:hover { background: var(--gris-fondo); text-decoration: underline; }
 .panel-item.activo { background: #E8F3FF; color: var(--azul-sena); font-weight: 600; }
 
+.panel-item-expandible { width: 100%; display: flex; align-items: center; gap: 6px; background: none; border: none; cursor: pointer; text-align: left; }
+.panel-chevron-sub { color: var(--gris-texto); transition: transform 0.15s ease; font-size: 0.65rem; flex-shrink: 0; }
+.panel-subgrupo.abierto .panel-chevron-sub { transform: rotate(90deg); }
+.panel-subitems { display: none; flex-direction: column; padding-left: 14px; }
+.panel-subgrupo.abierto .panel-subitems { display: flex; }
+.panel-subitem { font-size: 0.79rem; }
+
 .panel-contenido { flex: 1; min-width: 0; }
 
 .panel-fondo-movil { display: none; }
