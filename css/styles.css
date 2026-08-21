@@ -315,7 +315,7 @@ tr:last-child td { border-bottom: none; }
   font-size: 1.3rem; cursor: pointer; padding: 4px 6px;
 }
 .panel-marca { font-weight: 700; font-size: 1.15rem; }
-.panel-marca span { color: var(--azul-sena); background: var(--blanco); padding: 1px 6px; border-radius: 4px; margin-left: 2px; }
+.panel-marca span { color: var(--verde-sena); background: var(--blanco); padding: 1px 6px; border-radius: 4px; margin-left: 2px; }
 .panel-topbar-derecha { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 .panel-usuario { font-size: 0.85rem; opacity: 0.95; text-transform: capitalize; }
 .panel-btn-salir {

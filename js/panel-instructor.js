@@ -75,7 +75,7 @@ function montarPanelInstructor(paginaActiva) {
   const html = `
     <div class="panel-topbar">
       <button type="button" class="panel-hamburguesa" id="btn-hamburguesa" aria-label="Abrir menú">☰</button>
-      <div class="panel-marca">Aula<span>SENA</span></div>
+      <a href="inicio.html" class="panel-marca" style="text-decoration:none;cursor:pointer;">Esther<span>Plus</span></a>
       <div class="panel-topbar-derecha">
         <span class="panel-usuario" id="panel-nombre-usuario">Instructor</span>
         <button type="button" class="panel-btn-salir" onclick="cerrarSesionInstructor()">Salir ⏻</button>

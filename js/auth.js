@@ -1,4 +1,4 @@
-// AulaSENA - auth.js
+// EstherPlus - auth.js
 // Maneja login de instructor (Supabase Auth) y acceso de aprendiz (ficha + documento).
 
 function cambiarRol(rol) {
@@ -41,7 +41,7 @@ async function iniciarSesionInstructor(evento) {
     return false;
   }
 
-  window.location.href = 'instructor/dashboard.html';
+  window.location.href = 'instructor/inicio.html';
   return false;
 }
 
