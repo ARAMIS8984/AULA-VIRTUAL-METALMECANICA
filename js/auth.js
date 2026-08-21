@@ -1,4 +1,4 @@
-// EstherPlus - auth.js
+// TatianaPLUS - auth.js
 // Maneja login de instructor (Supabase Auth) y acceso de aprendiz (ficha + documento).
 
 function cambiarRol(rol) {
