@@ -430,7 +430,12 @@ function hlGenerarPDF(){
     for(const{t,b} of segments){
       const partes=t.split(' ');
       partes.forEach((w,i)=>{
-        if(w!=='') words.push({w,b:b||false});
+        if(w==='') return;
+        if(/^[,.;:]+$/.test(w) && words.length>0){
+          words[words.length-1].w += w;
+        } else {
+          words.push({w,b:b||false});
+        }
       });
     }
     const lines=[];
@@ -459,7 +464,7 @@ function hlGenerarPDF(){
         doc.setFont('helvetica',o.b?'bold':'normal');
         return s+doc.getTextWidth(o.w)+(i>0?spaceW:0);
       },0);
-      const extraSpace=(!isLast&&line.length>1)?(cw-totalW)/(line.length-1):spaceW;
+      const extraSpace=(!isLast&&line.length>1)?spaceW+(cw-totalW)/(line.length-1):spaceW;
       let cx=ml;
       line.forEach((o,i)=>{
         doc.setFont('helvetica',o.b?'bold':'normal');
@@ -540,7 +545,7 @@ function hlGenerarPDF(){
   }
 
   const instrVal=hlV('hl-instructores')||'[instructores]';
-  const desc=hlV('hl-descripcionFalta')||'[descripción de la situación]';
+  const descripcionFalta=hlV('hl-descripcionFalta').trim();
 
   if(hlFaltaSeleccionada==='inasistencia'){
     const mesVal=hlV('hl-mes')||'[mes]',diasStr=hlDias.length?hlDias.join(', '):'[días]';
@@ -548,10 +553,10 @@ function hlGenerarPDF(){
       {t:'Nuestros registros indican que usted presenta '},
       {t:'inasistencia injustificada en el proceso formativo, específicamente los días '+diasStr+' del mes de '+mesVal+' del presente año. Estas inasistencias, correspondientes al mes de '+mesVal+' fueron registradas por el instructor '+instrVal+' y se encuentran registradas en el aplicativo SOFIA Plus.',b:true}
     ],y);y+=5;
-  } else {
+  } else if(descripcionFalta){
     y=writeJustifiedMixed([
-      {t:'Nuestros registros indican que usted '},
-      {t:desc,b:true}
+      {t:'Nuestros registros indican que usted, '},
+      {t:descripcionFalta,b:true}
     ],y);y+=5;
   }
 
