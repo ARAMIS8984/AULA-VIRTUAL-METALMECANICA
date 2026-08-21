@@ -14,30 +14,7 @@
     Esther<span style="color:var(--verde-sena);">Plus</span>
   </div>
   <p style="color:var(--gris-texto); font-size:0.95rem; margin-bottom:8px;">Centro Nacional Colombo Alemán — Área Metalmecánica</p>
-  <p id="inicio-saludo" style="color:var(--gris-texto); font-size:0.9rem; margin-bottom:44px;"></p>
-
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; text-align:left;">
-    <a href="dashboard.html" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
-      <div style="font-size:1.4rem; margin-bottom:6px;">📋</div>
-      <div style="font-weight:600; color:var(--negro-texto); margin-bottom:2px;">Mis fichas</div>
-      <div style="font-size:0.82rem; color:var(--gris-texto);">Selecciona una ficha para trabajar en ella</div>
-    </a>
-    <a href="asistencia.html" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
-      <div style="font-size:1.4rem; margin-bottom:6px;">📊</div>
-      <div style="font-weight:600; color:var(--negro-texto); margin-bottom:2px;">Asistencia</div>
-      <div style="font-size:0.82rem; color:var(--gris-texto);">Toma la asistencia del día</div>
-    </a>
-    <a href="calificaciones.html" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
-      <div style="font-size:1.4rem; margin-bottom:6px;">✅</div>
-      <div style="font-weight:600; color:var(--negro-texto); margin-bottom:2px;">Calificaciones</div>
-      <div style="font-size:0.82rem; color:var(--gris-texto);">Revisa el avance de tus aprendices</div>
-    </a>
-    <a href="solicitudes.html" class="tarjeta" style="text-decoration:none; color:inherit; display:block;">
-      <div style="font-size:1.4rem; margin-bottom:6px;">📝</div>
-      <div style="font-weight:600; color:var(--negro-texto); margin-bottom:2px;">Solicitudes</div>
-      <div style="font-size:0.82rem; color:var(--gris-texto);">Justificaciones pendientes de revisar</div>
-    </a>
-  </div>
+  <p id="inicio-saludo" style="color:var(--gris-texto); font-size:0.9rem;">Bienvenido, Instructor</p>
 </div>
 
 <script src="../js/supabase-config.js"></script>
@@ -46,15 +23,6 @@
 <script>
 requerirSesionInstructor();
 montarPanelInstructor('');
-mostrarSaludoInicio();
-
-async function mostrarSaludoInicio() {
-  try {
-    const { data } = await supabaseClient.auth.getUser();
-    const correo = data?.user?.email;
-    document.getElementById('inicio-saludo').textContent = correo ? `Bienvenido, ${correo.split('@')[0]}` : '';
-  } catch (e) {}
-}
 </script>
 </body>
 </html>
