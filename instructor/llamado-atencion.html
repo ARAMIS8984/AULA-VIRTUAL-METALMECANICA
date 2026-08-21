@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Llamado de Atención — AulaSENA</title>
+<link rel="stylesheet" href="../css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  /* Estilos propios de esta herramienta, aislados bajo .herr-llamado para no chocar con el resto de AulaSENA */
+  .herr-llamado { --hl-green: #15851E; --hl-green-light: #EAF3DE; --hl-green-mid: #27500A; --hl-border: #e2e8e0; --hl-bg: #f7f9f7; --hl-text: #1a1f1a; --hl-muted: #6b7a6b; }
+  .herr-llamado { max-width: 700px; margin: 0 auto; padding-bottom: 48px; }
+  .herr-llamado .hl-steps { display: flex; margin-bottom: 24px; background: white; border-radius: 12px; border: 1px solid var(--hl-border); overflow: hidden; }
+  .herr-llamado .hl-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px; position: relative; }
+  .herr-llamado .hl-step:not(:last-child)::after { content: ''; position: absolute; top: 20px; right: 0; width: 1px; height: 16px; background: var(--hl-border); }
+  .herr-llamado .hl-step-num { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--hl-border); background: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--hl-muted); transition: all 0.2s; }
+  .herr-llamado .hl-step.active .hl-step-num { background: var(--hl-green); border-color: var(--hl-green); color: white; }
+  .herr-llamado .hl-step.done .hl-step-num { background: var(--hl-green-light); border-color: var(--hl-green); color: var(--hl-green-mid); }
+  .herr-llamado .hl-step-label { font-size: 10px; color: var(--hl-muted); text-align: center; font-weight: 500; }
+  .herr-llamado .hl-step.active .hl-step-label { color: var(--hl-green); }
+  .herr-llamado .hl-card { background: white; border: 1px solid var(--hl-border); border-radius: 12px; padding: 20px; margin-bottom: 14px; }
+  .herr-llamado .hl-card h2 { font-size: 15px; font-weight: 600; color: var(--hl-text); margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--hl-border); display: flex; align-items: center; gap: 8px; }
+  .herr-llamado .hl-card h2::before { content: ''; display: inline-block; width: 4px; height: 16px; background: var(--hl-green); border-radius: 2px; }
+  .herr-llamado .hl-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .herr-llamado .hl-field { display: flex; flex-direction: column; gap: 5px; }
+  .herr-llamado .hl-field.full { grid-column: 1 / -1; }
+  .herr-llamado .hl-field label { font-size: 11px; font-weight: 600; color: var(--hl-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .herr-llamado input[type="text"], .herr-llamado input[type="date"], .herr-llamado select, .herr-llamado textarea { font-size: 14px; color: var(--hl-text); background: var(--hl-bg); border: 1px solid var(--hl-border); border-radius: 8px; padding: 9px 12px; transition: border-color 0.15s, box-shadow 0.15s; width: 100%; font-family: inherit; }
+  .herr-llamado input:focus, .herr-llamado select:focus, .herr-llamado textarea:focus { outline: none; border-color: var(--hl-green); box-shadow: 0 0 0 3px rgba(21,133,30,0.1); background: white; }
+  .herr-llamado textarea { resize: vertical; min-height: 85px; }
+  .herr-llamado .hl-opcion-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .herr-llamado .hl-opcion-card { border: 1.5px solid var(--hl-border); border-radius: 10px; padding: 16px 14px; cursor: pointer; transition: all 0.15s; background: white; }
+  .herr-llamado .hl-opcion-card:hover { border-color: var(--hl-green); background: #fbfdfb; }
+  .herr-llamado .hl-opcion-card.selected { border-color: var(--hl-green); background: var(--hl-green-light); }
+  .herr-llamado .hl-opcion-card .hl-oc-icon { font-size: 24px; margin-bottom: 8px; }
+  .herr-llamado .hl-opcion-card .hl-oc-title { font-size: 14px; font-weight: 600; color: var(--hl-text); margin-bottom: 3px; }
+  .herr-llamado .hl-opcion-card .hl-oc-sub { font-size: 12px; color: var(--hl-muted); }
+  .herr-llamado .hl-dias-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .herr-llamado .hl-dia-chip { display: flex; align-items: center; gap: 5px; padding: 4px 10px; background: var(--hl-green-light); border: 1px solid #c0dd97; border-radius: 20px; font-size: 13px; color: var(--hl-green-mid); }
+  .herr-llamado .hl-dia-chip button { background: none; border: none; cursor: pointer; color: var(--hl-green-mid); font-size: 16px; line-height: 1; padding: 0; }
+  .herr-llamado .hl-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+  .herr-llamado .hl-btn { padding: 10px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; border: none; font-family: inherit; }
+  .herr-llamado .hl-btn-primary { background: var(--hl-green); color: white; }
+  .herr-llamado .hl-btn-primary:hover { background: #0f6616; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(21,133,30,0.3); }
+  .herr-llamado .hl-btn-secondary { background: white; color: var(--hl-text); border: 1.5px solid var(--hl-border); }
+  .herr-llamado .hl-btn-secondary:hover { background: var(--hl-bg); }
+  .herr-llamado .hl-btn-pdf { background: var(--hl-green); color: white; padding: 12px 28px; font-size: 15px; }
+  .herr-llamado .hl-btn-pdf:hover { background: #0f6616; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(21,133,30,0.35); }
+  .herr-llamado .hl-preview-box { background: var(--hl-bg); border: 1px solid var(--hl-border); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .herr-llamado .hl-preview-box h3 { font-size: 11px; font-weight: 600; color: var(--hl-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; }
+  .herr-llamado .hl-preview-row { display: flex; gap: 10px; margin-bottom: 7px; font-size: 13px; }
+  .herr-llamado .hl-preview-row span:first-child { color: var(--hl-muted); min-width: 155px; flex-shrink: 0; }
+  .herr-llamado .hl-preview-row span:last-child { color: var(--hl-text); font-weight: 500; }
+  .herr-llamado .hl-info-card { background: #f0faf0; border: 1px solid #c0dd97; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; font-size: 13px; color: var(--hl-green-mid); line-height: 1.6; }
+  .herr-llamado .hl-campo-oculto { display: none !important; }
+  .herr-llamado .hl-panel { display: none; }
+  .herr-llamado .hl-panel.active { display: block; }
+  @media (max-width: 480px) { .herr-llamado .hl-grid2 { grid-template-columns: 1fr; } .herr-llamado .hl-opcion-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="contenedor" style="padding-top:32px; padding-bottom:8px; max-width:820px;">
+  <h2 style="margin-bottom:4px;">Llamado de Atención</h2>
+  <p style="font-size:13px;color:#6b7a6b;margin-bottom:20px;">Régimen de Medidas Formativas — Acuerdo 0009 de 2024</p>
+</div>
+
+<div class="herr-llamado">
+
+  <div class="hl-steps">
+    <div class="hl-step active" id="hl-s1"><div class="hl-step-num">1</div><span class="hl-step-label">Aprendiz</span></div>
+    <div class="hl-step" id="hl-s2"><div class="hl-step-num">2</div><span class="hl-step-label">Formación</span></div>
+    <div class="hl-step" id="hl-s3"><div class="hl-step-num">3</div><span class="hl-step-label">Tipo</span></div>
+    <div class="hl-step" id="hl-s4"><div class="hl-step-num">4</div><span class="hl-step-label">Llamado</span></div>
+    <div class="hl-step" id="hl-s5"><div class="hl-step-num">5</div><span class="hl-step-label">Falta</span></div>
+    <div class="hl-step" id="hl-s6"><div class="hl-step-num">6</div><span class="hl-step-label">Detalles</span></div>
+    <div class="hl-step" id="hl-s7"><div class="hl-step-num">7</div><span class="hl-step-label">Generar</span></div>
+  </div>
+
+  <!-- PANEL 1 -->
+  <div id="hl-panel1" class="hl-panel active">
+    <div class="hl-card">
+      <h2>Datos del aprendiz</h2>
+      <div class="hl-grid2">
+        <div class="hl-field full"><label>Nombre completo del aprendiz</label>
+          <input type="text" id="hl-nombreAprendiz" placeholder="Ej: NAILEA YORLYNES HERRERA HERRERA"></div>
+        <div class="hl-field"><label>Fecha del documento</label><input type="date" id="hl-fecha"></div>
+      </div>
+    </div>
+    <div class="hl-actions"><span></span>
+      <button class="hl-btn hl-btn-primary" onclick="hlGoTo(2)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- PANEL 2 -->
+  <div id="hl-panel2" class="hl-panel">
+    <div class="hl-card">
+      <h2>Datos de formación</h2>
+      <div class="hl-grid2">
+        <div class="hl-field full"><label>Programa de formación</label>
+          <select id="hl-programa">
+            <option value="">Seleccionar...</option>
+            <option>Mantenimiento Electromecanico Industrial</option>
+            <option>Mecánica de maquinaria industrial</option>
+            <option>Gestión de la Producción Industrial</option>
+            <option>Producción de Componentes Mecánicos con Máquinas de Control Numérico Computarizado</option>
+          </select>
+        </div>
+        <div class="hl-field"><label>Número de ficha</label>
+          <input type="text" id="hl-ficha" placeholder="Ej: 3268194"></div>
+
+        <div class="hl-field full"><label>Instructor(es) que reportan la falta</label>
+          <select id="hl-instructores">
+            <option value="">Seleccionar...</option>
+            <option>Carlos Charris</option>
+            <option>Carlos Sabalza</option>
+            <option>Wilfrido Romero</option>
+            <option>Ana Maria Barrios</option>
+            <option>Aramis Vitola</option>
+            <option>Omar Pardey</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="hl-actions">
+      <button class="hl-btn hl-btn-secondary" onclick="hlGoTo(1)">← Anterior</button>
+      <button class="hl-btn hl-btn-primary" onclick="hlGoTo(3)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- PANEL 3 -->
+  <div id="hl-panel3" class="hl-panel">
+    <div class="hl-card">
+      <h2>Tipo de llamado de atención</h2>
+      <div class="hl-opcion-grid">
+        <div class="hl-opcion-card" onclick="hlSelectTipo('disciplinario')" id="hl-tc-disciplinario">
+          <div class="hl-oc-icon">🛡️</div>
+          <div class="hl-oc-title">Disciplinario</div>
+          <div class="hl-oc-sub">Comportamiento, asistencia, EPP, presentación personal</div>
+        </div>
+        <div class="hl-opcion-card" onclick="hlSelectTipo('academico')" id="hl-tc-academico">
+          <div class="hl-oc-icon">📚</div>
+          <div class="hl-oc-title">Académico</div>
+          <div class="hl-oc-sub">Incumplimiento de actividades y compromisos formativos</div>
+        </div>
+      </div>
+    </div>
+    <div class="hl-actions">
+      <button class="hl-btn hl-btn-secondary" onclick="hlGoTo(2)">← Anterior</button>
+      <button class="hl-btn hl-btn-primary" onclick="hlGoTo(4)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- PANEL 4 -->
+  <div id="hl-panel4" class="hl-panel">
+    <div class="hl-card">
+      <h2>Número de llamado</h2>
+      <div class="hl-opcion-grid">
+        <div class="hl-opcion-card" onclick="hlSelectNumero('primero')" id="hl-nc-primero">
+          <div class="hl-oc-icon">1️⃣</div>
+          <div class="hl-oc-title">Primer llamado</div>
+          <div class="hl-oc-sub">Carácter preventivo y formativo — primera vez</div>
+        </div>
+        <div class="hl-opcion-card" onclick="hlSelectNumero('segundo')" id="hl-nc-segundo">
+          <div class="hl-oc-icon">2️⃣</div>
+          <div class="hl-oc-title">Segundo llamado</div>
+          <div class="hl-oc-sub">Reincidencia en la misma falta</div>
+        </div>
+      </div>
+    </div>
+    <div class="hl-actions">
+      <button class="hl-btn hl-btn-secondary" onclick="hlGoTo(3)">← Anterior</button>
+      <button class="hl-btn hl-btn-primary" onclick="hlGoTo(5)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- PANEL 5 -->
+  <div id="hl-panel5" class="hl-panel">
+    <div class="hl-card">
+      <h2 id="hl-panel5title">Tipo de falta</h2>
+      <div class="hl-opcion-grid" id="hl-faltasContainer"></div>
+    </div>
+    <div class="hl-actions">
+      <button class="hl-btn hl-btn-secondary" onclick="hlGoTo(4)">← Anterior</button>
+      <button class="hl-btn hl-btn-primary" onclick="hlGoTo(6)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- PANEL 6 -->
+  <div id="hl-panel6" class="hl-panel">
+    <div class="hl-card">
+      <h2 id="hl-panel6title">Detalles de la falta</h2>
+      <div class="hl-grid2">
+        <div class="hl-field hl-campo-oculto" id="hl-cd-mes">
+          <label>Mes de las inasistencias</label>
+          <select id="hl-mes"><option value="">Seleccionar...</option>
+            <option>enero</option><option>febrero</option><option>marzo</option><option>abril</option>
+            <option>mayo</option><option>junio</option><option>julio</option><option>agosto</option>
+            <option>septiembre</option><option>octubre</option><option>noviembre</option><option>diciembre</option>
+          </select>
+        </div>
+        <div class="hl-field hl-campo-oculto" id="hl-cd-dias">
+          <label>Agregar día específico</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="hl-diaInput" placeholder="Ej: lunes 6" style="flex:1">
+            <button class="hl-btn hl-btn-secondary" onclick="hlAddDia()" style="padding:9px 14px;">+ Agregar</button>
+          </div>
+        </div>
+        <div class="hl-field full hl-campo-oculto" id="hl-cd-diasgrid">
+          <label>Días registrados</label>
+          <div class="hl-dias-grid" id="hl-diasGrid"><span style="font-size:13px;color:#6b7a6b">Ningún día agregado aún</span></div>
+        </div>
+        <div class="hl-field full hl-campo-oculto" id="hl-cd-descripcion">
+          <label>Descripción de la situación</label>
+          <textarea id="hl-descripcionFalta" placeholder="Describa brevemente la situación presentada..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="hl-actions">
+      <button class="hl-btn hl-btn-secondary" onclick="hlGoTo(5)">← Anterior</button>
+      <button class="hl-btn hl-btn-primary" onclick="hlGoTo(7)">Revisar y generar →</button>
+    </div>
+  </div>
+
+  <!-- PANEL 7 -->
+  <div id="hl-panel7" class="hl-panel">
+    <div class="hl-preview-box">
+      <h3>Resumen del documento</h3>
+      <div id="hl-resumen"></div>
+    </div>
+    <div class="hl-info-card">
+      ✅ El PDF seguirá el formato oficial del <strong>Acuerdo 0009 de 2024</strong> del Reglamento del Aprendiz SENA, con el texto adaptado al tipo de llamado y falta seleccionados.
+    </div>
+    <div class="hl-actions">
+      <button class="hl-btn hl-btn-secondary" onclick="hlGoTo(6)">← Editar</button>
+      <button class="hl-btn hl-btn-pdf" onclick="hlGenerarPDF()">⬇ Generar PDF</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="../js/supabase-config.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/panel-instructor.js"></script>
+<script>
+requerirSesionInstructor();
+montarPanelInstructor('llamado-atencion');
+</script>
+
+<script>
+const { jsPDF } = window.jspdf;
+let hlDias = [], hlTipoLlamado = '', hlNumeroLlamado = '', hlFaltaSeleccionada = '';
+
+const HL_LOGO_B64 = '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';
+
+const HL_FALTAS_DISC = {
+  inasistencia: { icon:'📅', label:'Inasistencia injustificada', sub:'Cap. III, Art. 8',
+    articulo:'Capítulo III, Artículo 8 (Deberes del aprendiz SENA)',
+    parrafo1:'del Reglamento del Aprendiz SENA. El mencionado artículo establece, que el aprendiz debe asistir con puntualidad a todas las actividades propias del proceso de formación y justificar debidamente las inasistencias o incumplimientos a las actividades de formación, en los términos establecidos en el reglamento.',
+    esDias:true },
+  comportamiento: { icon:'⚠️', label:'Comportamiento inadecuado', sub:'Cap. V, Art. 41, num. 2',
+    articulo:'Capítulo V, Artículo 41, numeral 2',
+    parrafo1:'del Reglamento del Aprendiz SENA, establece que las faltas disciplinarias se configuran ante conductas que conlleven el incumplimiento de deberes o prohibiciones de carácter comportamental. La indisciplina y el desorden dentro del ambiente de formación afectan la armonía de la comunidad educativa y el normal desarrollo de la formación.',
+    esDias:false },
+  epp: { icon:'🦺', label:'No utilizó los EPP', sub:'Cap. II, Art. 9 + Art. 41',
+    articulo:'Capítulo II – Derechos y Deberes del Aprendiz SENA, Artículo 9 – Deberes del Aprendiz SENA',
+    parrafo1:'relacionado con el uso adecuado de los Elementos de Protección Personal (EPP). Así mismo, esta conducta se enmarca como una falta conforme al Capítulo IX – Proceso Disciplinario, Artículo 41 – Faltas del Reglamento del Aprendiz SENA.',
+    esDias:false },
+  presentacion: { icon:'👔', label:'Mala presentación personal', sub:'Cap. II, Art. 9 + Art. 41',
+    articulo:'Capítulo II – Derechos y Deberes del Aprendiz SENA, Artículo 9 – Deberes del Aprendiz SENA',
+    parrafo1:', es deber del aprendiz cumplir con las normas de presentación personal, orden, disciplina y comportamiento dentro de los ambientes de formación. El incumplimiento de estas disposiciones constituye una conducta que afecta el adecuado desarrollo del proceso formativo y puede ser considerada una falta conforme al Capítulo IX – Proceso Disciplinario, Artículo 41 – Faltas del Reglamento del Aprendiz SENA.',
+    esDias:false }
+};
+
+const HL_FALTAS_ACAD = {
+  actividades: { icon:'📋', label:'Incumplimiento de actividades', sub:'Cap. II, Art. 9 + Art. 41',
+    articulo:'Capítulo II – Derechos y Deberes del Aprendiz SENA, Artículo 9 – Deberes del Aprendiz SENA',
+    parrafo1:', es deber del aprendiz participar activamente en las actividades de formación, cumplir con las evidencias de aprendizaje programadas y asumir con responsabilidad los compromisos derivados de su proceso formativo. El incumplimiento de estas obligaciones afecta el logro de los resultados de aprendizaje y el desarrollo adecuado de la formación.',
+    esDias:false }
+};
+
+function hlSelectTipo(t){hlTipoLlamado=t;document.querySelectorAll('[id^="hl-tc-"]').forEach(c=>c.classList.remove('selected'));document.getElementById('hl-tc-'+t).classList.add('selected');}
+function hlSelectNumero(n){hlNumeroLlamado=n;document.querySelectorAll('[id^="hl-nc-"]').forEach(c=>c.classList.remove('selected'));document.getElementById('hl-nc-'+n).classList.add('selected');}
+function hlSelectFalta(f){hlFaltaSeleccionada=f;document.querySelectorAll('[id^="hl-fc-"]').forEach(c=>c.classList.remove('selected'));const el=document.getElementById('hl-fc-'+f);if(el)el.classList.add('selected');}
+
+function hlRenderFaltas(){
+  const pool=hlTipoLlamado==='academico'?HL_FALTAS_ACAD:HL_FALTAS_DISC;
+  document.getElementById('hl-faltasContainer').innerHTML=Object.entries(pool).map(([k,f])=>`<div class="hl-opcion-card" onclick="hlSelectFalta('${k}')" id="hl-fc-${k}"><div class="hl-oc-icon">${f.icon}</div><div class="hl-oc-title">${f.label}</div><div class="hl-oc-sub">${f.sub}</div></div>`).join('');
+  hlFaltaSeleccionada='';
+  document.getElementById('hl-panel5title').textContent=hlTipoLlamado==='academico'?'Tipo de falta académica':'Tipo de falta disciplinaria';
+}
+
+function hlMostrarCampos(){
+  const pool=hlTipoLlamado==='academico'?HL_FALTAS_ACAD:HL_FALTAS_DISC;
+  const falta=pool[hlFaltaSeleccionada];
+  ['hl-cd-mes','hl-cd-dias','hl-cd-diasgrid','hl-cd-descripcion'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.add('hl-campo-oculto');});
+  if(!falta)return;
+  if(hlFaltaSeleccionada==='inasistencia'){
+    ['hl-cd-mes','hl-cd-dias','hl-cd-diasgrid'].forEach(id=>document.getElementById(id).classList.remove('hl-campo-oculto'));
+  } else {
+    document.getElementById('hl-cd-descripcion').classList.remove('hl-campo-oculto');
+  }
+  const titulos={
+    inasistencia:'Detalles de inasistencia',
+    comportamiento:'Descripción del comportamiento inadecuado',
+    epp:'Descripción del incumplimiento de EPP',
+    presentacion:'Descripción de la presentación personal',
+    actividades:'Descripción del incumplimiento académico'
+  };
+  document.getElementById('hl-panel6title').textContent=titulos[hlFaltaSeleccionada]||'Detalles de la falta';
+
+  const placeholders={
+    comportamiento:'Describa los hechos sucedidos — conducta o comportamiento del aprendiz...',
+    epp:'Describa el incumplimiento en el uso de los EPP...',
+    presentacion:'Describa la situación de presentación personal...',
+    actividades:'Describa el incumplimiento de actividades académicas...'
+  };
+  const descEl=document.getElementById('hl-descripcionFalta');
+  if(descEl) descEl.placeholder=placeholders[hlFaltaSeleccionada]||'Describa la situación presentada...';
+}
+
+function hlValidateStep(n){
+  if(n===3&&!hlTipoLlamado){alert('Por favor selecciona el tipo de llamado');return false;}
+  if(n===4&&!hlNumeroLlamado){alert('Por favor selecciona el número de llamado');return false;}
+  if(n===5&&!hlFaltaSeleccionada){alert('Por favor selecciona el tipo de falta');return false;}
+  const checks={1:[['hl-nombreAprendiz','Nombre del aprendiz'],['hl-fecha','Fecha']],2:[['hl-programa','Programa de formación'],['hl-ficha','Número de ficha'],['hl-instructores','Instructor(es)']],6:[]};
+  for(const[id,label]of(checks[n]||[])){const el=document.getElementById(id);if(!el||!el.value.trim()){alert('Por favor completa: '+label);el&&el.focus();return false;}}
+  return true;
+}
+
+function hlGoTo(n){
+  if(n>1&&!hlValidateStep(n-1))return;
+  for(let i=1;i<=7;i++){
+    document.getElementById('hl-panel'+i).classList.toggle('active',i===n);
+    const s=document.getElementById('hl-s'+i);
+    s.classList.remove('active','done');
+    if(i<n)s.classList.add('done');
+    if(i===n)s.classList.add('active');
+  }
+  if(n===5)hlRenderFaltas();
+  if(n===6)hlMostrarCampos();
+  if(n===7)hlBuildResumen();
+}
+
+function hlAddDia(){const val=document.getElementById('hl-diaInput').value.trim();if(!val)return;hlDias.push(val);document.getElementById('hl-diaInput').value='';hlRenderDias();}
+function hlRemoveDia(i){hlDias.splice(i,1);hlRenderDias();}
+function hlRenderDias(){const g=document.getElementById('hl-diasGrid');if(!hlDias.length){g.innerHTML='<span style="font-size:13px;color:#6b7a6b">Ningún día agregado aún</span>';return;}g.innerHTML=hlDias.map((d,i)=>`<div class="hl-dia-chip">${d}<button onclick="hlRemoveDia(${i})">×</button></div>`).join('');}
+function hlV(id){return(document.getElementById(id)||{}).value||'';}
+
+function hlBuildResumen(){
+  const pool=hlTipoLlamado==='academico'?HL_FALTAS_ACAD:HL_FALTAS_DISC;
+  const falta=pool[hlFaltaSeleccionada]||{};
+  const fr=hlV('hl-fecha'),ff=fr?fr.split('-').reverse().join(' – '):'';
+  const tipoLabel={'disciplinario':'Disciplinario','academico':'Académico'}[hlTipoLlamado]||'';
+  const numLabel={'primero':'Primer llamado','segundo':'Segundo llamado'}[hlNumeroLlamado]||'';
+  document.getElementById('hl-resumen').innerHTML=`
+    <div class="hl-preview-row"><span>Aprendiz:</span><span>${hlV('hl-nombreAprendiz')}</span></div>
+    <div class="hl-preview-row"><span>Ciudad y fecha:</span><span>Barranquilla, ${ff}</span></div>
+    <div class="hl-preview-row"><span>Programa:</span><span>${hlV('hl-programa')}</span></div>
+    <div class="hl-preview-row"><span>Ficha:</span><span>${hlV('hl-ficha')}</span></div>
+    <div class="hl-preview-row"><span>Tipo de llamado:</span><span>${tipoLabel} — ${numLabel}</span></div>
+    <div class="hl-preview-row"><span>Tipo de falta:</span><span>${falta.label||''}</span></div>
+    <div class="hl-preview-row"><span>Instructor(es):</span><span>${hlV('hl-instructores')}</span></div>
+    ${falta.esDias?`<div class="hl-preview-row"><span>Mes:</span><span>${hlV('hl-mes')}</span></div><div class="hl-preview-row"><span>Días:</span><span>${hlDias.join(', ')||'[sin días]'}</span></div>`:''}
+  `;
+}
+
+function hlGenerarPDF(){
+  const pool=hlTipoLlamado==='academico'?HL_FALTAS_ACAD:HL_FALTAS_DISC;
+  const falta=pool[hlFaltaSeleccionada]||{};
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210,ml=25,mr=25,cw=W-ml-mr;
+  let y=15;
+  const BLACK=[0,0,0], HEADER_COLOR=[13,13,12];
+  const AREA_FIJA='Instructor – Metalmecánica';
+  const CENTRO_FIJO='CENTRO NACIONAL COLOMBOALEMAN';
+
+  function fechaLetras(f){
+    if(!f)return'';
+    const meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const[yy,m,d]=f.split('-');
+    return parseInt(d)+' de '+meses[parseInt(m)-1]+' de '+yy;
+  }
+
+  function addLogo(sy){
+    try{doc.addImage('data:image/jpeg;base64,'+HL_LOGO_B64,'JPEG',W/2-15,sy,30,30);}catch(e){}
+    return sy+34;
+  }
+
+  function writeJustified(txt,sy,bold=false){
+    doc.setFontSize(10);doc.setFont('helvetica',bold?'bold':'normal');doc.setTextColor(...BLACK);
+    const lines=doc.splitTextToSize(txt,cw);
+    for(let i=0;i<lines.length;i++){
+      const line=lines[i];
+      const isLast=(i===lines.length-1);
+      if(isLast||lines.length===1){
+        doc.text(line,ml,sy);
+      } else {
+        const words=line.trim().split(/\s+/);
+        if(words.length===1){doc.text(line,ml,sy);}
+        else{
+          const totalW=words.reduce((s,w)=>s+doc.getTextWidth(w),0);
+          const spaceW=(cw-totalW)/(words.length-1);
+          let cx=ml;
+          words.forEach((w,wi)=>{doc.text(w,cx,sy);cx+=doc.getTextWidth(w)+(wi<words.length-1?spaceW:0);});
+        }
+      }
+      sy+=5.5;
+    }
+    return sy;
+  }
+
+  function writeJustifiedMixed(segments,sy){
+    doc.setFontSize(10);doc.setTextColor(...BLACK);
+    const words=[];
+    for(const{t,b} of segments){
+      const partes=t.split(' ');
+      partes.forEach((w,i)=>{
+        if(w!=='') words.push({w,b:b||false});
+      });
+    }
+    const lines=[];
+    let currentLine=[];
+    let currentW=0;
+    const spaceW=doc.getTextWidth(' ');
+    for(const word of words){
+      doc.setFont('helvetica',word.b?'bold':'normal');
+      const ww=doc.getTextWidth(word.w);
+      const needed=currentLine.length===0?ww:ww+spaceW;
+      if(currentLine.length>0 && currentW+needed>cw){
+        lines.push(currentLine);
+        currentLine=[word];
+        currentW=ww;
+      } else {
+        currentLine.push(word);
+        currentW+=needed;
+      }
+    }
+    if(currentLine.length>0) lines.push(currentLine);
+
+    for(let li=0;li<lines.length;li++){
+      const line=lines[li];
+      const isLast=li===lines.length-1;
+      const totalW=line.reduce((s,o,i)=>{
+        doc.setFont('helvetica',o.b?'bold':'normal');
+        return s+doc.getTextWidth(o.w)+(i>0?spaceW:0);
+      },0);
+      const extraSpace=(!isLast&&line.length>1)?(cw-totalW)/(line.length-1):spaceW;
+      let cx=ml;
+      line.forEach((o,i)=>{
+        doc.setFont('helvetica',o.b?'bold':'normal');
+        doc.text(o.w,cx,sy);
+        cx+=doc.getTextWidth(o.w)+(i<line.length-1?extraSpace:0);
+      });
+      sy+=5.5;
+    }
+    doc.setFont('helvetica','normal');
+    return sy;
+  }
+
+  y=addLogo(y);
+
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...HEADER_COLOR);
+  doc.text('REGIMEN DE MEDIDAS FORMATIVAS',W/2,y,{align:'center'});y+=6;
+  const tituloMap={
+    disciplinario:{primero:'PRIMER LLAMADO DE ATENCIÓN DISCIPLINARIO',segundo:'SEGUNDO LLAMADO DE ATENCIÓN DISCIPLINARIO'},
+    academico:{primero:'PRIMER LLAMADO DE ATENCIÓN ACADÉMICO',segundo:'SEGUNDO LLAMADO DE ATENCIÓN ACADÉMICO'}
+  };
+  const tituloLinea=(tituloMap[hlTipoLlamado]&&tituloMap[hlTipoLlamado][hlNumeroLlamado])||'LLAMADO DE ATENCIÓN';
+  doc.text(tituloLinea+' EQUIPO EJECUTOR DE',W/2,y,{align:'center'});y+=6;
+  const progUpper=hlV('hl-programa').toUpperCase();
+  doc.setFontSize(10);
+  const progW=doc.getTextWidth(progUpper);
+  if(progW>cw){doc.setFontSize(8);}
+  doc.text(progUpper,W/2,y,{align:'center'});
+  doc.setFontSize(10);
+  y+=12;
+
+  doc.setTextColor(...BLACK);
+  doc.setFont('helvetica','bold');
+  doc.text('Barranquilla \u2013 '+fechaLetras(hlV('hl-fecha')),ml,y);y+=8;
+
+  const datosArr=[
+    ['Aprendiz: ',hlV('hl-nombreAprendiz').toUpperCase()],
+    ['Programa de Formación: ',hlV('hl-programa')],
+    ['Ficha: ',hlV('hl-ficha')],
+    ['Centro de Formación: ',CENTRO_FIJO]
+  ];
+  for(const[lb,vl]of datosArr){
+    doc.setFont('helvetica','bold');doc.text(lb,ml,y);
+    const lbW=doc.getTextWidth(lb);
+    doc.setFont('helvetica','normal');
+    const valLines=doc.splitTextToSize(vl,cw-lbW);
+    doc.text(valLines[0],ml+lbW,y);
+    if(valLines.length>1){y+=5.5;doc.text(valLines[1],ml,y);}
+    y+=6;
+  }
+  y+=8;
+
+  doc.setFont('helvetica','bold');doc.text('Estimado Aprendiz,',ml,y);y+=7;
+  doc.setFont('helvetica','normal');doc.text('Reciba un cordial saludo.',ml,y);y+=7;
+
+  if(hlFaltaSeleccionada==='actividades'){
+    y=writeJustifiedMixed([
+      {t:'De conformidad con lo establecido en el '},
+      {t:falta.articulo||'',b:true},
+      {t:falta.parrafo1}
+    ],y);y+=5;
+    y=writeJustifiedMixed([
+      {t:'La conducta descrita puede constituir una falta de acuerdo con '},
+      {t:'lo establecido en el Capítulo IX – Proceso Disciplinario, Artículo 41 – Faltas,',b:true},
+      {t:' al evidenciar el incumplimiento de los deberes y compromisos adquiridos como aprendiz SENA.'}
+    ],y);y+=5;
+  } else if(hlFaltaSeleccionada==='epp'||hlFaltaSeleccionada==='presentacion'){
+    y=writeJustifiedMixed([
+      {t:'A través de la presente, nos permitimos informarle que, de acuerdo con el seguimiento realizado a su proceso formativo, usted incumplió lo establecido en el '},
+      {t:falta.articulo||'',b:true},
+      {t:falta.parrafo1}
+    ],y);y+=5;
+  } else {
+    y=writeJustifiedMixed([
+      {t:'A través de la presente comunicación, nos permitimos informarle que, de acuerdo con el seguimiento realizado a su proceso formativo, se ha identificado una falta disciplinaria, relacionada con el '},
+      {t:falta.articulo||'',b:true},
+      {t:', '+falta.parrafo1}
+    ],y);y+=5;
+  }
+
+  const instrVal=hlV('hl-instructores')||'[instructores]';
+  const desc=hlV('hl-descripcionFalta')||'[descripción de la situación]';
+
+  if(hlFaltaSeleccionada==='inasistencia'){
+    const mesVal=hlV('hl-mes')||'[mes]',diasStr=hlDias.length?hlDias.join(', '):'[días]';
+    y=writeJustifiedMixed([
+      {t:'Nuestros registros indican que usted presenta '},
+      {t:'inasistencia injustificada en el proceso formativo, específicamente los días '+diasStr+' del mes de '+mesVal+' del presente año. Estas inasistencias, correspondientes al mes de '+mesVal+' fueron registradas por el instructor '+instrVal+' y se encuentran registradas en el aplicativo SOFIA Plus.',b:true}
+    ],y);y+=5;
+  } else {
+    y=writeJustifiedMixed([
+      {t:'Nuestros registros indican que usted '},
+      {t:desc,b:true}
+    ],y);y+=5;
+  }
+
+  y=writeJustified('Por lo tanto, este llamado tiene un carácter preventivo y formativo. Esperamos contar con su compromiso para superar esta situación. Su participación activa y constante es fundamental para el desarrollo de su proceso formativo y el logro de las competencias establecidas en el programa de formación.',y);y+=5;
+
+  y=writeJustifiedMixed([
+    {t:'Le informamos que, de persistir esta situación, se procederá a realizar el segundo llamado de atención, de acuerdo con las medidas formativas establecidas en el '},
+    {t:'Acuerdo 0009 de 2024 del Reglamento del Aprendiz SENA.',b:true}
+  ],y);y+=12;
+
+  doc.text('Atentamente,',ml,y);y+=18;
+
+  doc.setFont('helvetica','bold');
+  doc.text(hlV('hl-instructores').toUpperCase(),ml,y);y+=6;
+  doc.text(AREA_FIJA,ml,y);y+=6;
+  doc.text(CENTRO_FIJO,ml,y);
+
+  doc.save('Llamado_'+hlTipoLlamado+'_'+hlNumeroLlamado+'_'+(hlV('hl-nombreAprendiz').replace(/\s+/g,'_')||'aprendiz')+'.pdf');
+}
+
+document.getElementById('hl-fecha').valueAsDate=new Date();
+</script>
+
+</body>
+</html>

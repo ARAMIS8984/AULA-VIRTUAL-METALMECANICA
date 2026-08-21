@@ -17,7 +17,7 @@ const GRUPOS_MENU = [
       { texto: 'Asistencia', href: 'asistencia.html', id: 'asistencia' },
       { texto: 'Calificaciones', href: 'calificaciones.html', id: 'calificaciones' },
       { texto: 'Reportes', href: 'reportes.html', id: 'reportes' },
-      { texto: 'Llamado de Atención', href: 'https://aramis8984.github.io/llamado-atencion-sena/?ir=llamados', externo: true },
+      { texto: 'Llamado de Atención', href: 'llamado-atencion.html', id: 'llamado-atencion' },
       {
         texto: 'Plan de Mejoramiento',
         subitems: [
