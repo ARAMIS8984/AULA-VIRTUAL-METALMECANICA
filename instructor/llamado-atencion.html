@@ -576,6 +576,26 @@ function hlGenerarPDF(){
   doc.text(CENTRO_FIJO,ml,y);
 
   doc.save('Llamado_'+hlTipoLlamado+'_'+hlNumeroLlamado+'_'+(hlV('hl-nombreAprendiz').replace(/\s+/g,'_')||'aprendiz')+'.pdf');
+
+  hlGuardarEnHistorial(falta);
+}
+
+async function hlGuardarEnHistorial(falta) {
+  const fichaId = document.getElementById('hl-select-ficha').value;
+  if (!fichaId || !hlAprendizIdSeleccionado) {
+    console.warn('Llamado no guardado en historial: no se seleccionó ficha y/o aprendiz registrado en la base de datos.');
+    return;
+  }
+  const { error } = await supabaseClient.from('llamados_atencion').insert({
+    aprendiz_id: hlAprendizIdSeleccionado,
+    ficha_id: fichaId,
+    tipo_llamado: hlTipoLlamado,
+    numero_llamado: hlNumeroLlamado,
+    motivo: falta.label || '',
+    fecha: hlV('hl-fecha'),
+    instructor: hlV('hl-instructores'),
+  });
+  if (error) console.error('Error guardando llamado en historial:', error);
 }
 
 document.getElementById('hl-fecha').valueAsDate=new Date();
@@ -586,6 +606,7 @@ document.getElementById('hl-fecha').valueAsDate=new Date();
 // ===== Autocompletado desde la ficha (Supabase) =====
 let hlFichas = [];
 let hlAprendices = [];
+let hlAprendizIdSeleccionado = null;
 
 async function hlInicializarFichas() {
   const sel = document.getElementById('hl-select-ficha');
@@ -618,6 +639,7 @@ function hlModoManualCompleto() {
   document.getElementById('hl-wrap-aprendiz-manual').classList.remove('hl-campo-oculto');
   document.getElementById('hl-ficha').readOnly = false;
   document.getElementById('hl-programa').disabled = false;
+  hlAprendizIdSeleccionado = null;
 }
 
 async function hlAlSeleccionarFicha() {
@@ -661,6 +683,7 @@ async function hlAlSeleccionarFicha() {
 async function hlCargarAprendices(fichaId) {
   const selAprendiz = document.getElementById('hl-select-aprendiz');
   selAprendiz.innerHTML = '<option value="">Cargando aprendices...</option>';
+  hlAprendizIdSeleccionado = null;
 
   const { data, error } = await supabaseClient
     .from('aprendices')
@@ -686,11 +709,13 @@ function hlAlSeleccionarAprendiz() {
     wrapManual.classList.remove('hl-campo-oculto');
     document.getElementById('hl-nombreAprendiz').value = '';
     document.getElementById('hl-nombreAprendiz').focus();
+    hlAprendizIdSeleccionado = null;
     return;
   }
   wrapManual.classList.add('hl-campo-oculto');
   const aprendiz = hlAprendices.find(a => String(a.id) === String(sel.value));
   document.getElementById('hl-nombreAprendiz').value = aprendiz ? aprendiz.nombre_completo : '';
+  hlAprendizIdSeleccionado = aprendiz ? aprendiz.id : null;
 }
 
 hlInicializarFichas();

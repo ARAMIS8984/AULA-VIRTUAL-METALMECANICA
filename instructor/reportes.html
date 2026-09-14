@@ -42,6 +42,28 @@
 
   <div id="resumen-general" class="grid-2" style="margin-bottom:20px;"></div>
 
+  <div class="tarjeta" id="resumen-ficha" style="margin-bottom:20px; display:none;">
+    <h3 style="margin-bottom:4px;">📊 Resumen de ficha <span id="resumen-ficha-trimestre" style="font-weight:400; color:var(--gris-texto); font-size:0.85rem;"></span></h3>
+    <p style="font-size:0.82rem; color:var(--gris-texto); margin-bottom:16px;">Combina calificaciones, asistencia y llamados de atención de todos los aprendices de la ficha.</p>
+
+    <div id="mejor-aprendiz-box" style="background:#f0faf0; border:1px solid #c0dd97; border-radius:10px; padding:14px 18px; margin-bottom:18px;"></div>
+
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Aprendiz</th>
+            <th>% Asistencia</th>
+            <th>Nota (calificaciones)</th>
+            <th>Llamados de atención</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-resumen-ficha"></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="tarjeta" id="gestion-dias" style="margin-bottom:20px;"></div>
 
   <div class="tarjeta" style="padding:0;">
@@ -167,6 +189,110 @@ async function cargarReporte() {
   renderizarTabla();
   renderizarResumen(totalDiasUnicos);
   renderizarGestionDias(registros || [], fichaId);
+  cargarResumenFicha(fichaId, aprendices);
+}
+
+function colorNota(nota) {
+  if (nota >= 80) return 'var(--verde-sena)';
+  if (nota >= 60) return '#E6A700';
+  return 'var(--rojo-error)';
+}
+
+async function cargarResumenFicha(fichaId, aprendices) {
+  const caja = document.getElementById('resumen-ficha');
+  caja.style.display = 'block';
+
+  const { data: ficha } = await supabaseClient
+    .from('fichas')
+    .select('trimestre, peso_asistencia, peso_foro, peso_actividades')
+    .eq('id', fichaId)
+    .single();
+
+  document.getElementById('resumen-ficha-trimestre').textContent = ficha?.trimestre ? `— Trimestre ${ficha.trimestre}` : '';
+
+  const pesoAsistencia = (ficha?.peso_asistencia ?? 30) / 100;
+  const pesoForo = (ficha?.peso_foro ?? 20) / 100;
+  const pesoActividades = (ficha?.peso_actividades ?? 50) / 100;
+
+  const { data: temasFicha } = await supabaseClient.from('foros_temas').select('id').eq('ficha_id', fichaId);
+  const idsTemas = (temasFicha || []).map(t => t.id);
+  let respuestasForo = [];
+  if (idsTemas.length > 0) {
+    const { data } = await supabaseClient.from('foros_respuestas').select('aprendiz_id, calificacion').in('tema_id', idsTemas).not('calificacion', 'is', null);
+    respuestasForo = data || [];
+  }
+
+  const { data: actividadesFicha } = await supabaseClient.from('examenes').select('id').eq('ficha_id', fichaId);
+  const idsActividades = (actividadesFicha || []).map(a => a.id);
+  let resultadosActividades = [];
+  if (idsActividades.length > 0) {
+    const { data } = await supabaseClient
+      .from('resultados_examen')
+      .select('aprendiz_id, puntaje_obtenido')
+      .in('examen_id', idsActividades)
+      .eq('revisado', true)
+      .eq('no_presentado', false)
+      .not('puntaje_obtenido', 'is', null);
+    resultadosActividades = data || [];
+  }
+
+  const { data: llamados } = await supabaseClient
+    .from('llamados_atencion')
+    .select('aprendiz_id, motivo, fecha, tipo_llamado')
+    .eq('ficha_id', fichaId)
+    .order('fecha', { ascending: false });
+
+  const filas = aprendices.map(a => {
+    const reporteAsistencia = datosReporteActual.find(d => d.id === a.id);
+    const pctAsistencia = reporteAsistencia ? reporteAsistencia.porcentaje : null;
+    const notaAsistencia = pctAsistencia === null ? null : pctAsistencia;
+
+    const notasForo = respuestasForo.filter(r => r.aprendiz_id === a.id).map(r => r.calificacion);
+    const notaForo = notasForo.length > 0 ? (notasForo.reduce((s, n) => s + n, 0) / notasForo.length) : null;
+
+    const misResultados = resultadosActividades.filter(r => r.aprendiz_id === a.id).map(r => r.puntaje_obtenido);
+    const notaActividades = misResultados.length > 0 ? misResultados.reduce((s, n) => s + n, 0) / misResultados.length : null;
+
+    const componentes = [
+      { nota: notaAsistencia, peso: pesoAsistencia },
+      { nota: notaForo, peso: pesoForo },
+      { nota: notaActividades, peso: pesoActividades },
+    ].filter(c => c.nota !== null);
+    const pesoTotal = componentes.reduce((s, c) => s + c.peso, 0);
+    const notaFinal = pesoTotal > 0 ? componentes.reduce((s, c) => s + c.nota * c.peso, 0) / pesoTotal : null;
+
+    const misLlamados = (llamados || []).filter(l => l.aprendiz_id === a.id);
+
+    // Puntaje para "mejor aprendiz": promedio simple entre calificaciones y asistencia
+    const puntajeMejorAprendiz = (notaFinal !== null && pctAsistencia !== null) ? (notaFinal + pctAsistencia) / 2 : null;
+
+    return { id: a.id, nombre: a.nombre_completo, pctAsistencia, notaFinal, llamados: misLlamados, puntajeMejorAprendiz };
+  });
+
+  // Mejor aprendiz: cualquier llamado de atención descalifica automáticamente
+  const candidatos = filas.filter(f => f.llamados.length === 0 && f.puntajeMejorAprendiz !== null);
+  candidatos.sort((x, y) => y.puntajeMejorAprendiz - x.puntajeMejorAprendiz);
+  const mejor = candidatos[0] || null;
+
+  const cajaMejor = document.getElementById('mejor-aprendiz-box');
+  cajaMejor.innerHTML = mejor
+    ? `🏆 <strong>Mejor aprendiz del trimestre:</strong> ${mejor.nombre} — ${Math.round(mejor.puntajeMejorAprendiz)} pts (calificaciones ${Math.round(mejor.notaFinal)}, asistencia ${mejor.pctAsistencia}%, sin llamados de atención)`
+    : `Aún no hay un aprendiz postulable: se necesita al menos uno sin llamados de atención y con calificaciones y asistencia registradas.`;
+
+  filas.sort((x, y) => (y.puntajeMejorAprendiz ?? -1) - (x.puntajeMejorAprendiz ?? -1));
+
+  document.getElementById('tabla-resumen-ficha').innerHTML = filas.map((f, i) => `
+    <tr${mejor && f.id === mejor.id ? ' style="background:#f0faf0;"' : ''}>
+      <td>${mejor && f.id === mejor.id ? '🏆' : (i + 1)}</td>
+      <td>${f.nombre}</td>
+      <td>${f.pctAsistencia !== null ? f.pctAsistencia + '%' : '—'}</td>
+      <td>${f.notaFinal !== null ? Math.round(f.notaFinal) : '—'}</td>
+      <td>${f.llamados.length === 0
+        ? '<span style="color:var(--gris-texto);">Ninguno</span>'
+        : `<span style="color:var(--rojo-error); font-weight:600;">${f.llamados.length}</span> · <span style="font-size:0.8rem; color:var(--gris-texto);">último: ${f.llamados[0].fecha} — ${f.llamados[0].motivo}</span>`
+      }</td>
+    </tr>
+  `).join('');
 }
 
 function colorBarra(porcentaje) {
