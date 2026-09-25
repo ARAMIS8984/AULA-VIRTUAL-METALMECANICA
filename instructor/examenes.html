@@ -48,6 +48,7 @@
       <select id="modalidad-actividad" onchange="alCambiarModalidad()">
         <option value="examen_online">📝 Examen en línea (preguntas con puntos)</option>
         <option value="entrega_documento">📎 Entrega de documento (el aprendiz sube un archivo, tú calificas)</option>
+        <option value="entrega_enlace">🔗 Entrega de enlace (el aprendiz pega un link, ej: carpeta de Drive)</option>
         <option value="texto_fotos">✍️ Trabajo escrito + fotos (el aprendiz escribe y sube fotos de lo que hizo)</option>
         <option value="participacion">🗣️ Participación / evaluación directa (tú calificas a cada uno, sin que entreguen nada)</option>
       </select>
@@ -213,7 +214,7 @@ async function cargarActividades(fichaId) {
     let estadoClase = 'etiqueta-gris';
     if (a.fecha_fin && ahora > new Date(a.fecha_fin)) { estadoTexto = 'Cerrado'; estadoClase = 'etiqueta-rojo'; }
     else if (a.fecha_inicio && ahora >= new Date(a.fecha_inicio)) { estadoTexto = 'Disponible ahora'; estadoClase = 'etiqueta-verde'; }
-    const badgeModalidad = a.modalidad === 'entrega_documento' ? '📎 Entrega de documento' : a.modalidad === 'texto_fotos' ? '✍️ Trabajo escrito + fotos' : a.modalidad === 'participacion' ? '🗣️ Participación / evaluación directa' : '📝 Examen en línea';
+    const badgeModalidad = a.modalidad === 'entrega_documento' ? '📎 Entrega de documento' : a.modalidad === 'entrega_enlace' ? '🔗 Entrega de enlace' : a.modalidad === 'texto_fotos' ? '✍️ Trabajo escrito + fotos' : a.modalidad === 'participacion' ? '🗣️ Participación / evaluación directa' : '📝 Examen en línea';
 
     return `
       <div class="actividad-tarjeta">
@@ -243,6 +244,7 @@ async function verResultados(examenId) {
 
   const actividad = actividadesCache[examenId];
   const esDocumento = actividad?.modalidad === 'entrega_documento';
+  const esEnlace = actividad?.modalidad === 'entrega_enlace';
   const esTextoFotos = actividad?.modalidad === 'texto_fotos';
   const esParticipacion = actividad?.modalidad === 'participacion';
 
@@ -294,7 +296,7 @@ async function verResultados(examenId) {
     .order('fecha_presentacion', { ascending: false });
 
   if (error) { cont.innerHTML = `<p style="color:var(--rojo-error);">${error.message}</p>`; return; }
-  if (!resultados || resultados.length === 0) { cont.innerHTML = `<p class="texto-ayuda">Nadie ha ${(esDocumento || esTextoFotos) ? 'entregado' : 'presentado'} esta actividad todavía.</p>`; return; }
+  if (!resultados || resultados.length === 0) { cont.innerHTML = `<p class="texto-ayuda">Nadie ha ${(esDocumento || esEnlace || esTextoFotos) ? 'entregado' : 'presentado'} esta actividad todavía.</p>`; return; }
 
   cont.innerHTML = resultados.map(r => `
     <div class="tarjeta espaciado-v" style="margin-bottom:8px;">
@@ -305,6 +307,10 @@ async function verResultados(examenId) {
       ${esDocumento ? `
         <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
           ${r.url_documento ? `<a href="${r.url_documento}" target="_blank" rel="noopener">📎 Ver documento entregado</a>` : '<em>Sin documento</em>'}
+        </div>
+      ` : esEnlace ? `
+        <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
+          ${r.url_documento ? `<a href="${r.url_documento}" target="_blank" rel="noopener">🔗 Abrir enlace entregado</a>` : '<em>Sin enlace</em>'}
         </div>
       ` : esTextoFotos ? `
         <div style="border-top:1px solid var(--gris-borde); padding-top:8px; margin-top:8px; font-size:0.85rem;">
